@@ -22,12 +22,18 @@
     -webkit-mask-image:radial-gradient(ellipse 62% 58% at 50% 58%,transparent 38%,#000 100%);mask-image:radial-gradient(ellipse 62% 58% at 50% 58%,transparent 38%,#000 100%)}
   #turboV{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .22s;background:radial-gradient(ellipse 75% 70% at 50% 58%,transparent 55%,#0a284466 100%)}
   @media (pointer:fine){.btn{display:none}}
+  .stick{position:fixed;bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;background:transparent;touch-action:none;display:none;z-index:5}
+  .stick i{position:absolute;left:43px;top:43px;width:64px;height:64px;border-radius:50%;background:#ffffff44;border:2px solid #ffffff66}
+  #stL{left:max(22px,env(safe-area-inset-left))} #stR{right:max(22px,env(safe-area-inset-right))}
+  @media (max-aspect-ratio:1/1){#perf{top:auto;bottom:196px;left:8px;font-size:9px}#carrera{top:50px;font-size:13px}#zona{top:88px}#vel{bottom:200px}}
+  body.sticks .stick{display:block} body.sticks .btn,body.sticks #bAuto{display:none}
 </style>
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
 <div id="turbo"></div><div id="turboV"></div>
 <div id="perf" class="hud"></div><div id="carrera" class="hud"></div><div id="zona" class="hud"></div><div id="vel" class="hud"></div>
+<div id="stL" class="stick"><i></i></div><div id="stR" class="stick"><i></i></div>
 <div id="izq" class="btn">◀</div><div id="der" class="btn">▶</div><div id="freno" class="btn">FRENO<br>DERRAPE</div><div id="gas" class="btn">GAS</div>
 <button id="bCam" class="mini">Cámara</button><button id="bAuto" class="mini">Auto-gas</button><button id="bReset" class="mini">Reset</button>
 <script type="module">
@@ -158,13 +164,22 @@ if (Q.has('z')) { est.z = +Q.get('z'); est.x = +(Q.get('x') || 0); }
 const MIRA = Q.get('mira') || ''; if (Q.has('yaw')) est.yaw = +Q.get('yaw');
 try { est.mejor = +localStorage.getItem('tfr_gris_puente') || null; } catch (e) {}
 // ---------------- controles
-const ent = { gas: 0, freno: 0, izq: 0, der: 0 }; let autoGas = MOVIL || new URLSearchParams(location.search).has('auto'), camAerea = new URLSearchParams(location.search).has('aer'), empezado = new URLSearchParams(location.search).has('auto');
+const ent = { gas: 0, freno: 0, izq: 0, der: 0, abajo: 0 }; let autoGas = MOVIL || new URLSearchParams(location.search).has('auto'), camAerea = new URLSearchParams(location.search).has('aer'), empezado = new URLSearchParams(location.search).has('auto');
 const teclas = { ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'freno', KeyS: 'freno', Space: 'freno', ArrowLeft: 'izq', KeyA: 'izq', ArrowRight: 'der', KeyD: 'der' };
 addEventListener('keydown', e => { if (teclas[e.code]) { ent[teclas[e.code]] = 1; e.preventDefault(); } if (e.code === 'KeyR') reset(); if (e.code === 'KeyC') camAerea = !camAerea; });
 addEventListener('keyup', e => { if (teclas[e.code]) ent[teclas[e.code]] = 0; });
 for (const id of ['izq', 'der', 'gas', 'freno']) { const b = document.getElementById(id);
   b.addEventListener('pointerdown', e => { empezado = true; ent[id] = 1; b.classList.add('on'); b.setPointerCapture(e.pointerId); e.preventDefault(); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { ent[id] = 0; b.classList.remove('on'); }); }
+{ const usar = new URLSearchParams(location.search).has('stick') || MOVIL; let tAb = 0; window.__tAb = () => tAb; window.__sAb = v => tAb = v;
+  if (usar) { document.body.classList.add('sticks'); autoGas = false; }
+  const mk = (id, onMove, onEnd) => { const el = document.getElementById(id), kn = el.querySelector('i'); let pid = null;
+    const mover = e => { const r = el.getBoundingClientRect(); let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); const l = Math.hypot(dx, dy), m = 75; if (l > m) { dx *= m / l; dy *= m / l; } kn.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; onMove(dx / m, dy / m); };
+    el.addEventListener('pointerdown', e => { pid = e.pointerId; el.setPointerCapture(pid); empezado = true; mover(e); e.preventDefault(); });
+    el.addEventListener('pointermove', e => { if (e.pointerId === pid) mover(e); });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, () => { pid = null; kn.style.transform = ''; onEnd(); }); };
+  mk('stL', x => { ent.izq = Math.max(0, -x - .12) / .88; ent.der = Math.max(0, x - .12) / .88; }, () => { ent.izq = ent.der = 0; });
+  mk('stR', (x, y) => { ent.gas = Math.max(0, -y - .15) / .85; ent.freno = y > .25 ? 1 : 0; ent.abajo = y > .25 ? 1 : 0; }, () => { ent.gas = 0; ent.freno = 0; ent.abajo = 0; }); }
 const bAuto = document.getElementById('bAuto'); bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; bAuto.onclick = () => { autoGas = !autoGas; bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; };
 document.getElementById('bCam').onclick = () => camAerea = !camAerea;
 function reset() { Object.assign(est, { x: 0, z: 16, yaw: 0, vx: 0, vz: 0, carga: 0, turbo: 0, t0: null, tv: 0, vuelta: 1 }); }
@@ -182,10 +197,11 @@ function fisica(dt) {
   if (ent.gas) empezado = true;
   const gas = autoGas && empezado ? Math.max(ent.gas, 1 - ent.freno) : ent.gas, giro = ent.der - ent.izq;
   est.derrape = ent.freno && Math.abs(giro) > 0 && fs > 10;
-  const vmax = est.turbo > 0 ? M.turbo : M.velMax; let a = gas * M.acel + (est.turbo > 0 ? 16 : 0); if (ent.freno && !est.derrape) a -= M.freno * Math.sign(fs || 1);
+  const vmax = est.turbo > 0 ? M.turbo : M.velMax; window.__sAb(ent.abajo && fs < 1.5 ? window.__tAb() + dt : 0); const atras = window.__tAb() > .45;
+  let a = gas * M.acel + (est.turbo > 0 ? 16 : 0); if (atras) a = -M.acel * .55; else if (ent.freno && !est.derrape) a -= M.freno * Math.sign(fs || 1);
   est.vx += fx * a * dt; est.vz += fz * a * dt; fs = est.vx * fx + est.vz * fz;
   const lx = est.vx - fx * fs, lz = est.vz - fz * fs, ag = Math.exp(-(est.derrape ? M.agarreDerrape : M.agarre) * dt), roz = Math.exp(-(gas ? .08 : .35) * dt);
-  let nfs = Math.max(-5, fs * roz); if (nfs > vmax) nfs = Math.max(vmax, nfs - 30 * dt);
+  let nfs = Math.max(atras ? -9 : -5, fs * roz); if (nfs > vmax) nfs = Math.max(vmax, nfs - 30 * dt);
   est.vx = fx * nfs + lx * ag; est.vz = fz * nfs + lz * ag;
   const efi = Math.min(1, Math.abs(nfs) / 6) * Math.sign(nfs) * (1 - .3 * Math.abs(nfs) / M.velMax);
   est.yaw -= giro * M.giro * dt * efi * (est.derrape ? M.giroDerrape : 1);
@@ -224,7 +240,7 @@ function frame() {
   else {
     const dist = 6.4 + v * .05; let cx = est.x - fx * dist, cz = est.z - fz * dist; const lim = hw(cz) - .4; if (Math.abs(cx) > lim) cx = Math.sign(cx) * lim;
     camPos.lerp(new THREE.Vector3(cx, 2.5, cz), 1 - Math.exp(-dt * 7)); camera.position.copy(camPos);
-    camera.fov += ((68 + v * .35 + (est.turbo > 0 ? 14 : 0)) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+    camera.fov += (((innerWidth < innerHeight ? 80 : 68) + v * .35 + (est.turbo > 0 ? 14 : 0)) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
     if (MIRA === 'izq') camera.lookAt(est.x - 30, 6, est.z + 14); else if (MIRA === 'der') camera.lookAt(est.x + 30, 6, est.z + 14); else if (MIRA === 'alto') camera.lookAt(est.x + fx * 20, 14, est.z + fz * 20); else camera.lookAt(est.x + fx * 9, 1.4, est.z + fz * 9);
   }
   const tb = est.turbo > 0 ? '1' : '0'; if (tb !== tbPrev) { elTurbo.style.opacity = tb; elTurboV.style.opacity = tb; tbPrev = tb; }
