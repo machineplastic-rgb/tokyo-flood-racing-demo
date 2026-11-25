@@ -3,10 +3,12 @@
 
 // ---- 1) fachada procedural en el material de la ciudad (ventanas, juntas de azulejo, musgo, enredaderas, oclusión al pie)
 export function fachada(THREE, mat, uSun) {
+  const ld = new THREE.TextureLoader(), T = n => { const t = ld.load('fach/f_' + n + '.png'); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+  const tb = T('balcones'), tc = T('cristal'), tl = T('ladrillo'), tn = T('bandas'), tr = T('rotulos'), tz = T('azulejo');
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uSun = { value: uSun };
+    sh.uniforms.uSun = { value: uSun }; sh.uniforms.tB = { value: tb }; sh.uniforms.tC = { value: tc }; sh.uniforms.tL = { value: tl }; sh.uniforms.tN = { value: tn }; sh.uniforms.tR = { value: tr }; sh.uniforms.tZ = { value: tz };
     sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun;\n' +
+    sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun; uniform sampler2D tB, tC, tL, tN, tR, tZ;\n' +
       `float hs(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }\n` +
       sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       {
@@ -20,17 +22,12 @@ export function fachada(THREE, mat, uSun) {
         col = vec3(lum) * tint * 1.18 + vec3(.05,.045,.035);
         // juntas de azulejo cada 1 m
         float jx = step(.93, fract(u*1.)), jy = step(.93, fract(y*1.)); col *= 1. - .10*max(jx, jy);
-        // ventanas: celdas de 3,2 x 3,4 m
-        vec2 cell = vec2(u/3.2, y/3.4), f = fract(cell), id = floor(cell); float h = hs(id + bid*17.);
-        float win = step(.16, f.x) * step(f.x, .84) * step(.30, f.y) * step(f.y, .84) * step(.6, y) * step(y, 60.);
-        if (win > .5 && h > .12) {
-          vec3 gl = mix(vec3(.10,.20,.30), vec3(.52,.72,.86), clamp(f.y*1.1 + h*.4 - .3, 0., 1.));
-          if (h > .78) gl = vec3(.05,.09,.13);                                  // hueco roto
-          if (fract(f.x*3.2) < .08 || fract(f.y*3.) < .06) gl = col*.55;        // marcos y travesaños
-          col = mix(col, gl, wall);
-        } else if (win > .5) col *= .78;                                        // persiana
-        // repisa bajo cada forjado
-        col *= 1. - .22*wall*step(f.y, .08)*step(.6, y);
+        // fachada plana de Flow (vista frontal) tileada por bloque: 14 m de ancho y 13 m de alto por repetición
+        float pick = hs(floor(vec2(vWP.x/17., vWP.z/17.)) + 3.);
+        vec2 fuv = vec2(u/14., y/13.);
+        vec4 ft = pick < .22 ? texture2D(tB, fuv) : pick < .44 ? texture2D(tC, fuv) : pick < .60 ? texture2D(tL, vec2(u/11., y/7.5)) : pick < .80 ? texture2D(tN, fuv) : pick < .90 ? texture2D(tR, vec2(u/9., y/12.)) : texture2D(tZ, vec2(u/9., y/9.));
+        col = mix(col, ft.rgb * 1.08, wall * ft.a * step(.5, y + 3.4));
+        float h = 0.; vec2 f = vec2(0.);
         // sombra propia (cara que no mira al sol)
         float sunl = clamp(dot(n, normalize(uSun)), 0., 1.); col *= mix(.62, 1.14, sunl);
         // musgo y enredaderas que suben desde el agua en tiras irregulares
