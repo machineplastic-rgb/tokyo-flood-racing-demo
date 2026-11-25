@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Tokyo Flood Racing — Caja gris del tramo del puente</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#cfe3e6;touch-action:none;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif}
+  canvas{display:block}
+  .hud{position:fixed;color:#16202a;font:600 13px ui-monospace,monospace;background:#f3ebddcc;border-radius:8px;padding:6px 9px;pointer-events:none}
+  #perf{top:8px;left:8px;font-weight:500;font-size:11px;line-height:1.45}
+  #carrera{top:8px;left:50%;transform:translateX(-50%);text-align:center;font-size:15px}
+  #zona{top:54px;left:50%;transform:translateX(-50%);font-weight:500;font-size:12px}
+  #vel{bottom:14px;left:50%;transform:translateX(-50%);font-size:20px}
+  .btn{position:fixed;display:grid;place-items:center;border-radius:50%;background:#22262bb3;color:#f3ebdd;font:700 15px system-ui;border:2px solid #f3ebdd55;touch-action:none}
+  .btn.on{background:#1c7c8ccc}
+  #izq{left:18px;bottom:22px;width:96px;height:96px;font-size:34px} #der{left:130px;bottom:22px;width:96px;height:96px;font-size:34px}
+  #gas{right:18px;bottom:22px;width:116px;height:116px} #freno{right:148px;bottom:30px;width:84px;height:84px;font-size:12px}
+  .mini{position:fixed;top:8px;padding:8px 11px;border-radius:8px;background:#22262bb3;color:#f3ebdd;font:600 12px system-ui;border:0}
+  #bCam{right:8px} #bAuto{right:88px} #bReset{right:172px}
+  #turbo{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .22s;-webkit-backdrop-filter:blur(5px) saturate(1.15);backdrop-filter:blur(5px) saturate(1.15);
+    -webkit-mask-image:radial-gradient(ellipse 62% 58% at 50% 58%,transparent 38%,#000 100%);mask-image:radial-gradient(ellipse 62% 58% at 50% 58%,transparent 38%,#000 100%)}
+  #turboV{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .22s;background:radial-gradient(ellipse 75% 70% at 50% 58%,transparent 55%,#0a284466 100%)}
+  @media (pointer:fine){.btn{display:none}}
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+<div id="turbo"></div><div id="turboV"></div>
+<div id="perf" class="hud"></div><div id="carrera" class="hud"></div><div id="zona" class="hud"></div><div id="vel" class="hud"></div>
+<div id="izq" class="btn">◀</div><div id="der" class="btn">▶</div><div id="freno" class="btn">FRENO<br>DERRAPE</div><div id="gas" class="btn">GAS</div>
+<button id="bCam" class="mini">Cámara</button><button id="bAuto" class="mini">Auto-gas</button><button id="bReset" class="mini">Reset</button>
+<script type="module">
+import * as THREE from 'three';
+import { crearAgua, crearEspumaMuro } from './agua.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+const VERSION = 'Prueba de agua v1 · puente (shader propio)';
+const MOVIL = matchMedia('(pointer:coarse)').matches;
+const M = { velMax: 25, turbo: 36, acel: 11, freno: 18, giro: 2.1, agarre: 7, agarreDerrape: 1.6, giroDerrape: 1.45, radio: .8 };
+const LEN = 218;
+const QS = new URLSearchParams(location.search), TEX = !QS.has('gris'), HORA = QS.get('hora') || 'dia';
+const TXM = TEX ? await (await import('./tex.js')).texturas(THREE) : null;
+// Coordenadas del plano: x = a lo largo del canal, y = a traves (negativo = norte). Mundo: Z = x, X = y.
+
+// ---------------- render
+const renderer = new THREE.WebGLRenderer({ antialias: !MOVIL, powerPreference: 'high-performance' });
+let pr = Math.min(devicePixelRatio, MOVIL ? 1.25 : 1.5); renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight); document.body.prepend(renderer.domElement);
+THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+  float fogF = smoothstep(fogNear, fogFar, vFogDepth);
+  float lum = dot(gl_FragColor.rgb, vec3(.299, .587, .114));
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(lum), fogF * .6);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogF * .92);
+#endif`;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#bcd9e8'); scene.fog = new THREE.Fog('#c9e0ec', 40, 210);
+const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, .3, 700);
+scene.add(new THREE.HemisphereLight('#e2f3ff', '#9aa3aa', 2.1));
+const sol = new THREE.DirectionalLight('#fff0cf', 2.4); sol.position.set(-90, 130, 60); scene.add(sol);
+
+// ---------------- materiales grises por funcion (todo plano: fase estructura)
+const MAT = {};
+const TXMAP = { l1a: 'mosaico_verde_gris', l1b: 'ladrillo_gris_oscuro', l1c: 'azulejo_marron', l2: 'hormigon_encofrado', l3: 'piedra_gris_paneles', sky: 'cristal_azul', muelle: 'adoquin_gris', calle: 'adoquin_gris', pared: 'hormigon_encofrado', puente: 'hormigon_encofrado', pila: 'pilar_franjas', tren: 'panel_blanco_sucio', trenv: 'chapa_verde', tunel: 'panel_plateado', isla: 'cieno_orilla', valla: 'pilar_franjas', agua: 'agua' };
+const TINTE = { l2: '#d4dbe3', l3: '#cfe0f0', sky: '#cfe0f0', pared: '#8f989e' };
+const mat = (k, c) => MAT[k] ||= (TEX && TXM[TXMAP[k]]) ? new THREE.MeshLambertMaterial({ map: TXM[TXMAP[k]], color: TINTE[k] || '#ffffff' }) : new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+const COL = { l1a: '#a9afb6', l1b: '#979ea6', l1c: '#b7bcc2', l2: '#868c95', l3: '#b9c4cf', sky: '#aab7c5', muelle: '#858b92', calle: '#5f656d', puente: '#c5c8cc', pila: '#8e949b', tunel: '#767b83',
+  tren: '#e4e8ea', trenv: '#6fae3c', isla: '#7e8a76', verde: '#6f8a6a', cable: '#222', farol: '#c7524a', valla: '#d9c24a' };
+const geos = {};                                    // por material: lista de geometrias a fusionar
+const addG = (k, g) => (geos[k] ||= []).push(g);
+let seed = 11; const R = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+// caja en coordenadas de plano: x0..x1 a lo largo, y0..y1 a traves, h0..h1 altura
+function B(x0, x1, y0, y1, h0, h1, k) {
+  const g = new THREE.BoxGeometry(y1 - y0, h1 - h0, x1 - x0);
+  if (TEX) { const T = 4, dx = y1 - y0, dy = h1 - h0, dz = x1 - x0, uv = g.attributes.uv, caras = [[dz, dy], [dz, dy], [dx, dz], [dx, dz], [dx, dy], [dx, dy]];   // texturas a escala real: 4 m por repeticion
+    for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) uv.setXY(f * 4 + i, uv.getX(f * 4 + i) * caras[f][0] / T, uv.getY(f * 4 + i) * caras[f][1] / T); }
+  g.translate((y0 + y1) / 2, (h0 + h1) / 2, (x0 + x1) / 2); addG(k, g);
+}
+// ---------------- canal: semianchura segun la posicion
+const sm = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+const W0 = TEX ? 9 : 7, W1 = TEX ? 16 : 14;          // inundado: el agua llega de fachada a fachada (sin aceras)
+const hw = (z) => { z = ((z % LEN) + LEN) % LEN; if (z < 142) return W0; if (z < 156) return W0 + (W1 - W0) * sm((z - 142) / 14); if (z < 180) return W1; if (z < 194) return W1 - (W1 - W0) * sm((z - 180) / 14); return W0; };
+const ALT_MUELLE = TEX ? -3.4 : .6;                 // inundado: el suelo de la calle esta 3,4 m bajo el agua
+{ // agua (liso), muelle con hueco y paredes
+  const hole = [], N = LEN;
+  for (let z = 0; z <= N; z += 1) hole.push(new THREE.Vector2(-hw(z), -z));
+  for (let z = N; z >= 0; z -= 1) hole.push(new THREE.Vector2(hw(z), -z));
+  const outer = new THREE.Shape([new THREE.Vector2(-90, 0), new THREE.Vector2(90, 0), new THREE.Vector2(90, -N), new THREE.Vector2(-90, -N)]);
+  outer.holes.push(new THREE.Path(hole.slice().reverse()));
+  const esc = (g, s) => { const u = g.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * s, u.getY(i) * s); };
+  const gs = new THREE.ShapeGeometry(outer); esc(gs, 1 / 4); gs.rotateX(-Math.PI / 2); gs.translate(0, ALT_MUELLE, 0); if (!TEX) addG('muelle', gs);
+  const sh = new THREE.Shape(hole); const ga = new THREE.ShapeGeometry(TEX ? new THREE.Shape([new THREE.Vector2(-95, 0), new THREE.Vector2(95, 0), new THREE.Vector2(95, -N), new THREE.Vector2(-95, -N)]) : sh); esc(ga, 1 / 7); ga.rotateX(-Math.PI / 2); ga.translate(0, 0, 0); addG('agua', ga);
+  const pos = [], nor = [], uv = [], idx = []; let n = 0;
+  const quad = (a, b, c, d, nx) => { pos.push(...a, ...b, ...c, ...d); for (let i = 0; i < 4; i++) { nor.push(nx, 0, 0); } uv.push(a[2] / 4, a[1] / 4, b[2] / 4, b[1] / 4, c[2] / 4, c[1] / 4, d[2] / 4, d[1] / 4); idx.push(n, n + 1, n + 2, n, n + 2, n + 3); n += 4; };
+  for (let z = 0; !TEX && z < N; z += 2) { const a = hw(z), b = hw(z + 2);
+    quad([-a, -1.5, z], [-b, -1.5, z + 2], [-b, ALT_MUELLE, z + 2], [-a, ALT_MUELLE, z], 1);
+    quad([a, -1.5, z + 2], [b, -1.5, z], [b, ALT_MUELLE, z], [a, ALT_MUELLE, z + 2], -1); }
+  const gw = new THREE.BufferGeometry(); gw.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gw.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); gw.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); gw.setIndex(idx);
+  if (!TEX) addG('pared', gw);
+}
+mat('agua', '#6fbcd0'); mat('pared', '#9a9fa6'); mat('muelle', COL.muelle);
+MAT.agua = TEX ? new THREE.MeshBasicMaterial({ map: TXM.agua }) : new THREE.MeshBasicMaterial({ color: '#69b9cf' });
+// ---------------- L1 primera linea (con huecos a proposito) + plaza retranqueada
+const huecosN = [[28, 33], [68, 73], [125, 131]], huecosS = [[46, 52], [113, 119]];
+const norte = [[0, 28], [33, 68], [73, 89], [101, 125], [131, 146], [190, 196]];
+const sur = [[0, 46], [52, 89], [101, 113], [119, 146], [190, 196]];
+let AGUA = null; if (TEX) { AGUA = crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }); MAT.agua = AGUA.mat; }
+const alt1 = (i) => 13 + R() * 13;
+if (!TEX) { norte.forEach(([a, b], i) => { const h = alt1(i); B(a, b, -21, -9, ALT_MUELLE, h, i % 2 ? 'l1a' : 'l1b'); if (b - a > 25) { B(a + 4, a + 12, -21, -9, h, h + 6 + R() * 6, 'l1c'); } }); }
+if (!TEX) { sur.forEach(([a, b], i) => { const h = alt1(i); B(a, b, 9, 21, ALT_MUELLE, h, i % 2 ? 'l1b' : 'l1a'); if (b - a > 25) { B(b - 12, b - 4, 9, 21, h, h + 6 + R() * 6, 'l1c'); } }); }
+if (!TEX) { B(146, 190, -22, -16, ALT_MUELLE, 10 + R() * 3, 'l1b'); B(146, 190, 16, 22, ALT_MUELLE, 10 + R() * 3, 'l1a'); }  // plaza: lados finos y bajos
+// huecos = callejones con suelo visible
+for (const [a, b] of huecosN) B(a, b, -24, -9, ALT_MUELLE, ALT_MUELLE + .08, 'calle'); for (const [a, b] of huecosS) B(a, b, 9, 24, ALT_MUELLE, ALT_MUELLE + .08, 'calle');
+// ---------------- L2 calles paralelas (se ven, no se pisan) y su fachada trasera
+B(0, LEN, -32, -24, ALT_MUELLE, ALT_MUELLE + .08, 'calle'); B(0, LEN, 24, 32, ALT_MUELLE, ALT_MUELLE + .08, 'calle');
+B(89, 101, -32, 32, ALT_MUELLE, ALT_MUELLE + .1, 'calle');                      // calle transversal por el puente (cerrada con vallas)
+if (!TEX) { for (const s of [-1, 1]) { let x = 0; while (x < LEN) { const w = 9 + R() * 14, h = 9 + R() * 16; if (!(x + w > 89 && x < 101)) B(x, Math.min(x + w, LEN), s < 0 ? -44 : 32.5, s < 0 ? -32.5 : 44, ALT_MUELLE, h, 'l2'); x += w + .6 + R() * 2; } } }
+// ---------------- L3 fondo: bloques y rascacielos
+if (!TEX) { for (const s of [-1, 1]) { let x = 0; while (x < LEN) { const w = 10 + R() * 18, d = 8 + R() * 10, sk = R() < .22, y0 = 46 + R() * 4, h = sk ? 70 + R() * 50 : 26 + R() * 24; }
+  B(x, Math.min(x + w, LEN), s < 0 ? -(y0 + d) : y0, s < 0 ? -y0 : y0 + d, ALT_MUELLE, h, sk ? 'sky' : 'l3'); x += w + 1 + R() * 3; } }
+// ---------------- puente rojo (arco: se pasa por debajo, 4,2 m libres) y su calle transversal
+if (!TEX) { B(90.5, 99.5, -9, 9, 4.2, 5.5, 'puente'); B(90.5, 99.5, -9, -7.2, ALT_MUELLE, 4.2, 'pila'); B(90.5, 99.5, 7.2, 9, ALT_MUELLE, 4.2, 'pila'); }
+if (!TEX) { B(90.5, 99.5, -9, -8.6, 5.5, 6.5, 'puente'); B(90.5, 99.5, 8.6, 9, 5.5, 6.5, 'puente'); }  // barandillas
+B(93, 98, -26, -23, ALT_MUELLE, 1.4, 'valla'); B(93, 98, 23, 26, ALT_MUELLE, 1.4, 'valla');       // cierres de la transversal
+// ---------------- tunel bajo edificio (18 m) con la 109 al fondo
+B(196, 214, -22, -W0, ALT_MUELLE, 20, 'tunel'); B(196, 214, W0, 22, ALT_MUELLE, 20, 'tunel'); B(196, 214, -W0, W0, 5.6, 20, 'tunel');
+// ---------------- islote-santuario en la plaza (obstaculo para el derrape)
+{ const g = new THREE.CylinderGeometry(4.6, 5.2, TEX ? 4.8 : 1.2, 10); g.translate(1, TEX ? -1 : .45, 168); addG('isla', g);
+  for (const [dx, dz, r] of TEX ? [] : [[-2.5, -1.5, 1.7], [2.5, -2, 1.4], [-1, 2.6, 1.5], [3, 2, 1.2]]) { const t = new THREE.SphereGeometry(r, 6, 5); t.translate(1 + dx, 2.4, 168 + dz); addG('verde', t); }
+  if (!TEX) B(167.3, 169.9, 0, 2, 1, 2.6, 'farol'); }
+// ---------------- cables con farolillos sobre el canal (marcadores)
+for (const z of [42, 72, 130]) { B(z - .05, z + .05, -9, 9, 7.4, 7.5, 'cable'); if (!TEX) for (let k = 0; k < 8; k++) B(z - .35, z + .35, -7 + k * 2 - .35, -7 + k * 2 + .35, 6.7, 7.4, 'farol'); }
+// ---------------- cierres de calles paralelas (vallas en los extremos)
+for (const s of [-1, 1]) B(1, 3, s * 28 - 3, s * 28 + 3, ALT_MUELLE, 1.6, 'valla');
+// ---------------- fusion por material y copias del tramo para el bucle
+const TEXMUNDO = TEX ? await (await import('./tex.js')).mundoTex({ THREE, B, addG, R, hw, LEN, ALT: ALT_MUELLE, huecosN, huecosS, norte, sur, scene, sol, HORA, TXM, MAT, camera }) : null;
+const mundo = new THREE.Group(); const ESP = TEX ? crearEspumaMuro(THREE, { LEN, hw, huecosN, huecosS }) : null; if (ESP) { ESP.mesh.renderOrder = 2; mundo.add(ESP.mesh); } if (TEXMUNDO) for (const o of TEXMUNDO.objetos) mundo.add(o);
+for (const [k, lista] of Object.entries(geos)) { const g = mergeGeometries(lista.map(x => x.index ? x : x), false); mundo.add(new THREE.Mesh(g, MAT[k] || mat(k, COL[k] || '#999'))); }
+// marcadores de las 10 historias (calles paralelas): cajas de color + etiqueta
+const HIST = [[-1, 14, 'N1', '#d63a2f'], [-1, 56, 'N2', '#8e44ad'], [-1, 112, 'N3', '#e67e22'], [-1, 160, 'N4', '#27ae60'], [1, 22, 'S1', '#16a085'], [1, 70, 'S2', '#2980b9'], [1, 106, 'S3', '#2c7fb8'], [1, 132, 'S4', '#c0392b'], [1, 168, 'S5', '#7f8c8d'], [1, 205, 'S6', '#d4a017']];
+for (const [s, x, id, col] of (TEX && !QS.has('etiq') ? [] : HIST)) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(5, 3.2, 5), new THREE.MeshLambertMaterial({ color: col, flatShading: true })); m.position.set(s * 28, ALT_MUELLE + 1.6, x); mundo.add(m);
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const c = cv.getContext('2d'); c.fillStyle = '#000a'; c.fillRect(0, 0, 128, 64); c.fillStyle = '#fff'; c.font = '700 46px system-ui'; c.textAlign = 'center'; c.fillText(id, 64, 50);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, fog: false })); sp.scale.set(7, 3.5, 1); sp.position.set(s * 28, 8, x); sp.renderOrder = 5; mundo.add(sp);
+}
+for (const off of [-1, 0, 1, 2]) { const c = off === 0 ? mundo : mundo.clone(); c.position.z = off * LEN; scene.add(c); }
+// ---------------- salpicaduras
+const NP = 420, ppos = new Float32Array(NP * 3).fill(-999), pvel = new Float32Array(NP * 3), pvida = new Float32Array(NP); let pk = 0;
+const puntos = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(ppos, 3)), new THREE.PointsMaterial({ color: '#ffffff', size: .38, transparent: true, opacity: .85, depthWrite: false })); puntos.frustumCulled = false; scene.add(puntos);
+function chorro(x, y, z, vx, vy, vz) { const i = pk++ % NP; ppos.set([x, y, z], i * 3); pvel.set([vx, vy, vz], i * 3); pvida[i] = .55 + Math.random() * .35; }
+// ---------------- moto bloque (solo escala)
+const moto = new THREE.Group();
+const casco = new THREE.Mesh(new THREE.BoxGeometry(1.3, .6, 3.2), new THREE.MeshLambertMaterial({ color: '#ede3cc' })); casco.position.y = .2;
+const piloto = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.2, .45), new THREE.MeshLambertMaterial({ color: '#ff5a4e' })); piloto.position.set(0, 1.05, -.3);
+const morro = new THREE.Mesh(new THREE.BoxGeometry(1.0, .35, .5), new THREE.MeshLambertMaterial({ color: '#1fd1e8' })); morro.position.set(0, .35, 1.5);
+const cuerpo = new THREE.Group(); cuerpo.add(casco, piloto, morro); moto.add(cuerpo); scene.add(moto);
+const est = { x: 0, z: 4, yaw: 0, vx: 0, vz: 0, vuelta: 1, t0: null, tv: 0, mejor: null, derrape: false, carga: 0, turbo: 0 };
+let ultimaZ = 4; const OB = [{ x: 1, z: 168, r: 5.6 }];
+const Q = new URLSearchParams(location.search);                     // ?z=80&x=0&aer=1&mira=izq|der|alto&auto=1  (capturas de prueba)
+if (Q.has('z')) { est.z = +Q.get('z'); est.x = +(Q.get('x') || 0); }
+const MIRA = Q.get('mira') || ''; if (Q.has('yaw')) est.yaw = +Q.get('yaw');
+try { est.mejor = +localStorage.getItem('tfr_gris_puente') || null; } catch (e) {}
+// ---------------- controles
+const ent = { gas: 0, freno: 0, izq: 0, der: 0 }; let autoGas = MOVIL || new URLSearchParams(location.search).has('auto'), camAerea = new URLSearchParams(location.search).has('aer'), empezado = new URLSearchParams(location.search).has('auto');
+const teclas = { ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'freno', KeyS: 'freno', Space: 'freno', ArrowLeft: 'izq', KeyA: 'izq', ArrowRight: 'der', KeyD: 'der' };
+addEventListener('keydown', e => { if (teclas[e.code]) { ent[teclas[e.code]] = 1; e.preventDefault(); } if (e.code === 'KeyR') reset(); if (e.code === 'KeyC') camAerea = !camAerea; });
+addEventListener('keyup', e => { if (teclas[e.code]) ent[teclas[e.code]] = 0; });
+for (const id of ['izq', 'der', 'gas', 'freno']) { const b = document.getElementById(id);
+  b.addEventListener('pointerdown', e => { empezado = true; ent[id] = 1; b.classList.add('on'); b.setPointerCapture(e.pointerId); e.preventDefault(); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { ent[id] = 0; b.classList.remove('on'); }); }
+const bAuto = document.getElementById('bAuto'); bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; bAuto.onclick = () => { autoGas = !autoGas; bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; };
+document.getElementById('bCam').onclick = () => camAerea = !camAerea;
+function reset() { Object.assign(est, { x: 0, z: 4, yaw: 0, vx: 0, vz: 0, carga: 0, turbo: 0, t0: null, tv: 0, vuelta: 1 }); }
+document.getElementById('bReset').onclick = reset;
+// ---------------- fisica arcade (canal recto: paredes segun la semianchura)
+let ultGolpe = -9;
+function golpeMuro(sg, vn, lim) {                                   // salpicadura al rozar o chocar con una fachada
+  const ahora = performance.now() / 1000; if (vn < 2 || ahora - ultGolpe < .12) return; ultGolpe = ahora;
+  const n = Math.min(26, Math.round(vn * 2.2)), pared = sg * (lim + M.radio);
+  for (let i = 0; i < n; i++) chorro(pared - sg * .15, .25 + Math.random() * .5, est.z + (Math.random() - .5) * 3, -sg * (.5 + Math.random() * 2.6), 3 + Math.random() * (2 + vn * .35), est.vz * .45 + (Math.random() - .5) * 4);
+  if (ESP) ESP.u.uHit.value.set(est.z, ahora, sg);
+}
+function fisica(dt) {
+  const fx = Math.sin(est.yaw), fz = Math.cos(est.yaw); let fs = est.vx * fx + est.vz * fz;
+  if (ent.gas) empezado = true;
+  const gas = autoGas && empezado ? Math.max(ent.gas, 1 - ent.freno) : ent.gas, giro = ent.der - ent.izq;
+  est.derrape = ent.freno && Math.abs(giro) > 0 && fs > 10;
+  const vmax = est.turbo > 0 ? M.turbo : M.velMax; let a = gas * M.acel + (est.turbo > 0 ? 16 : 0); if (ent.freno && !est.derrape) a -= M.freno * Math.sign(fs || 1);
+  est.vx += fx * a * dt; est.vz += fz * a * dt; fs = est.vx * fx + est.vz * fz;
+  const lx = est.vx - fx * fs, lz = est.vz - fz * fs, ag = Math.exp(-(est.derrape ? M.agarreDerrape : M.agarre) * dt), roz = Math.exp(-(gas ? .08 : .35) * dt);
+  let nfs = Math.max(-5, fs * roz); if (nfs > vmax) nfs = Math.max(vmax, nfs - 30 * dt);
+  est.vx = fx * nfs + lx * ag; est.vz = fz * nfs + lz * ag;
+  const efi = Math.min(1, Math.abs(nfs) / 6) * Math.sign(nfs) * (1 - .3 * Math.abs(nfs) / M.velMax);
+  est.yaw -= giro * M.giro * dt * efi * (est.derrape ? M.giroDerrape : 1);
+  est.x += est.vx * dt; est.z += est.vz * dt;
+  const lim = hw(est.z) - M.radio;                                         // paredes del canal
+  if (Math.abs(est.x) > lim) { const sg = Math.sign(est.x); est.x = sg * lim; if (est.vx * sg > 0) { golpeMuro(sg, est.vx * sg, lim); est.vx -= est.vx * 1.3; } est.vx *= .985; est.vz *= .985; }
+  for (const o of OB) { const zz = ((est.z - o.z + LEN / 2) % LEN + LEN) % LEN - LEN / 2, dx = est.x - o.x, dd = Math.hypot(dx, zz), rr = o.r + M.radio;   // islote
+    if (dd < rr && dd > 1e-3) { est.x = o.x + dx / dd * rr; est.z += zz / dd * rr - zz; const vn = (est.vx * dx + est.vz * zz) / dd; if (vn < 0) { est.vx -= dx / dd * vn * 1.4; est.vz -= zz / dd * vn * 1.4; } est.vx *= .9; est.vz *= .9; } }
+  if (est.derrape) { est.carga = Math.min(2, est.carga + dt); if (Math.random() < .6) chorro(est.x - fx * 1.2, .2, est.z - fz * 1.2, (Math.random() - .5) * 4, 2 + Math.random() * 2, (Math.random() - .5) * 4); }
+  else if (est.carga > 0) { if (est.carga > .7) est.turbo = Math.max(est.turbo, .5 + est.carga * .6); est.carga = 0; }
+  est.turbo = Math.max(0, est.turbo - dt);
+  return giro;
+}
+// ---------------- bucle y vueltas (al pasar de 218 m se vuelve a 0)
+const hudP = document.getElementById('perf'), hudC = document.getElementById('carrera'), hudV = document.getElementById('vel'), hudZ = document.getElementById('zona');
+const fmt = s => s == null ? '--' : `${s.toFixed(1)} s`;
+const ZONAS = [[0, 28, 'Salida · calle inundada'], [28, 89, 'Calle estrecha (huecos a calles N/S)'], [89, 101, 'VIADUCTO del tren'], [101, 142, 'Calle tras el viaducto'], [142, 194, 'EL CRUCE · islote'], [194, 218, 'TÚNEL bajo edificio · torre 109 al fondo']];
+const elTurbo = document.getElementById('turbo'), elTurboV = document.getElementById('turboV'); let tbPrev = '0';
+const reloj = new THREE.Clock(); let tJ = 0, fpsN = 0, fpsT = 0, camPos = new THREE.Vector3(est.x, 2.5, est.z - 6.4);
+function frame() {
+  const real = reloj.getDelta(), dt = Math.min(.05, real); tJ += dt;
+  if (Q.has('golpe')) est.vx = 16;
+  if (Q.has('turbo')) est.turbo = 5;
+  const giro = fisica(dt); const v = Math.hypot(est.vx, est.vz);
+  if (est.t0 === null && v > 1) est.t0 = tJ;
+  if (est.z >= LEN) { est.z -= LEN; camPos.z -= LEN; if (est.t0 !== null) { const tv = tJ - est.t0 - est.tv; est.tv += tv; if (!est.mejor || tv < est.mejor) { est.mejor = tv; try { localStorage.setItem('tfr_gris_puente', tv.toFixed(2)); } catch (e) {} } est.vuelta++; } }
+  if (est.z < 0) { est.z += LEN; camPos.z += LEN; }
+  moto.position.set(est.x, Math.sin(tJ * 7) * .03, est.z); moto.rotation.y = est.yaw;
+  cuerpo.rotation.z += ((giro * -.25 * Math.min(1, v / 15)) - cuerpo.rotation.z) * Math.min(1, dt * 6);
+  const fx = Math.sin(est.yaw), fz = Math.cos(est.yaw);
+  if (AGUA) { AGUA.u.uT.value = performance.now() / 1000; AGUA.u.uMoto.value.set(est.x, est.z, fx, fz); AGUA.u.uVel.value = v; ESP.u.uT.value = AGUA.u.uT.value; }
+  if (v > 4) for (let k = 0; k < Math.min(3, v * dt * 1.6 + Math.random()); k++) { const l = (Math.random() < .5 ? -1 : 1) * .7; chorro(est.x - fx * 1.4 + Math.cos(est.yaw) * l, .15, est.z - fz * 1.4 - Math.sin(est.yaw) * l, -fx * v * .25 + (Math.random() - .5) * 3, 1.5 + Math.random() * 2.5, -fz * v * .25 + (Math.random() - .5) * 3); }
+  for (let i = 0; i < NP; i++) { if (pvida[i] <= 0) { ppos[i * 3 + 1] = -999; continue; } pvida[i] -= dt; pvel[i * 3 + 1] -= 14 * dt; ppos[i * 3] += pvel[i * 3] * dt; ppos[i * 3 + 1] += pvel[i * 3 + 1] * dt; ppos[i * 3 + 2] += pvel[i * 3 + 2] * dt; if (ppos[i * 3 + 1] < 0) pvida[i] = 0; }
+  puntos.geometry.attributes.position.needsUpdate = true;
+  if (camAerea) { camera.position.set(est.x, 70, est.z + 1); camera.lookAt(est.x, 0, est.z); }
+  else {
+    const dist = 6.4 + v * .05; let cx = est.x - fx * dist, cz = est.z - fz * dist; const lim = hw(cz) - .4; if (Math.abs(cx) > lim) cx = Math.sign(cx) * lim;
+    camPos.lerp(new THREE.Vector3(cx, 2.5, cz), 1 - Math.exp(-dt * 7)); camera.position.copy(camPos);
+    camera.fov += ((68 + v * .35 + (est.turbo > 0 ? 14 : 0)) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+    if (MIRA === 'izq') camera.lookAt(est.x - 30, 6, est.z + 14); else if (MIRA === 'der') camera.lookAt(est.x + 30, 6, est.z + 14); else if (MIRA === 'alto') camera.lookAt(est.x + fx * 20, 14, est.z + fz * 20); else camera.lookAt(est.x + fx * 9, 1.4, est.z + fz * 9);
+  }
+  const tb = est.turbo > 0 ? '1' : '0'; if (tb !== tbPrev) { elTurbo.style.opacity = tb; elTurboV.style.opacity = tb; tbPrev = tb; }
+  renderer.render(scene, camera);
+  fpsN++; fpsT += real;
+  if (fpsT > .5) { const fps = fpsN / fpsT; fpsN = 0; fpsT = 0; if (fps < 40 && pr > .6) { pr -= .1; renderer.setPixelRatio(pr); } const inf = renderer.info.render; hudP.innerHTML = `${VERSION}<br>${fps.toFixed(0)} fps · ${inf.calls} llamadas · ${(inf.triangles / 1000).toFixed(0)}k tri`; }
+  const tc = est.t0 === null ? 0 : tJ - est.t0;
+  hudC.textContent = `Vuelta ${est.vuelta} · ${fmt(tc - est.tv)} · mejor ${fmt(est.mejor)}`;
+  hudV.textContent = `${Math.round(v * 3.6)} km/h${est.turbo > 0 ? ' · ¡TURBO!' : est.derrape ? ' · DERRAPE ' + '▮'.repeat(Math.floor(est.carga * 2.5)) : ''}`;
+  const z = est.z; hudZ.textContent = (ZONAS.find(([a, b]) => z >= a && z < b) || ZONAS[0])[2] + ` · ${z.toFixed(0)} m`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+window.__G = { est, camera, scene, renderer, fisica, ent, hw, LEN, setAuto: v => { autoGas = v; empezado = true; } };
+</script>
+</body>
+</html>
