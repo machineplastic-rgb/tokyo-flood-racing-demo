@@ -12,36 +12,34 @@ export function crearCielo(THREE, H, solPos) {
       float h(vec2 p){ p = fract(p*vec2(127.1, 311.7)); p += dot(p, p + 34.5); return fract(p.x*p.y); }
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3. - 2.*f); return mix(mix(h(i), h(i + vec2(1,0)), f.x), mix(h(i + vec2(0,1)), h(i + vec2(1,1)), f.x), f.y); }
       float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++){ s += a*vn(p); p = p*2.03 + 7.1; a *= .5; } return s; }
-      // una capa de nubes: p = coordenadas del plano de nubes, cov = cobertura (más alto = menos nubes)
-      vec4 nubes(vec2 p, float cell, float cov, vec2 sdir){
-        p = floor(p*cell)/cell;                                     // píxel de nube
-        float n = fbm(p);
-        if (n < cov) return vec4(0.);
-        float edge = n - cov, sh = fbm(p + sdir*.22) - n;           // sombra: densidad hacia el sol
-        vec3 c = vec3(.97, 1., 1.);
-        if (sh > .018) c = vec3(.78, .88, .96);
-        if (sh > .060) c = vec3(.58, .74, .88);
-        if (edge < .035 && sh < .02) c = mix(c, vec3(1., .96, .84), .8);   // borde iluminado por el sol
-        return vec4(c, 1.);
-      }
       void main(){
         vec3 d = normalize(vD); float y = d.y;
-        vec3 col = y > .35 ? mix(cMid, cTop, smoothstep(.35, .95, y)) : mix(cHor, cMid, smoothstep(0., .35, y));
-        float bandas = floor(y*14.)/14.; col = mix(col, y > .35 ? mix(cMid, cTop, smoothstep(.35, .95, bandas)) : mix(cHor, cMid, smoothstep(0., .35, bandas)), .85);   // degradado "a escalones"
-        // sol: disco + dos halos en bandas
-        float s = dot(d, uSol);
-        col += cSolC * (step(.9905, s)*1.4 + step(.975, s)*.22 + step(.93, s)*.10);
-        // nubes: capa lejana (pequeña, lenta) y cercana (grande, rápida); parallax con la posición de la moto
-        vec2 sdir = normalize(uSol.xz + vec2(.001));
-        if (y > .02) {
-          float k = 1./(y + .14);
-          vec2 p2 = d.xz*k*6. + vec2(uT*.010, uT*.004) + uCam*.0015;
-          vec4 n2 = nubes(p2, 13., .49, sdir);
-          col = mix(col, n2.rgb, n2.a*smoothstep(.02, .14, y));
-          vec2 p1 = d.xz*k*3.2 + vec2(uT*.022, uT*.007) + vec2(30., 11.) + uCam*.004;
-          vec4 n1 = nubes(p1, 9., .52, sdir);
-          col = mix(col, n1.rgb, n1.a*smoothstep(.03, .18, y));
+        // cielo limpio: degradado suave sin texturas (azul profundo arriba, más claro hacia el horizonte)
+        vec3 col = mix(cHor, cMid, smoothstep(0., .25, y)); col = mix(col, cTop, smoothstep(.25, .85, y));
+        // nubes grandes SOLO a los lados (a lo largo del canal se ve cielo limpio): cúmulos de base plana, tope blanco y sombra azul clara
+        float az = atan(d.z, d.x);                                   // ángulo horizontal
+        float lado = smoothstep(.08, .42, abs(d.x) / max(.001, length(d.xz)));    // 0 mirando a lo largo del canal, 1 mirando hacia los lados
+        float deriva = uT*.004;
+        vec2 u = vec2(az*3. + deriva, y*2.6);
+        vec2 up = floor(u*vec2(26., 30.))/vec2(26., 30.);               // píxel de nube
+        float nb = fbm(up*vec2(2.2, 3.4) + vec2(3., 0.)), nc = fbm(vec2(up.x*1.1 + deriva*.5, 5.));
+        float base = .24, alto = lado * (.30 + .50*nc);               // altura del cúmulo según la columna
+        float borde = (nb - .5) * .22;
+        float masa = step(base, y) * step(y, base + alto + borde) * step(.05, lado);
+        if (y > .01 && masa > .5) {
+          float tt = (y - base) / max(.05, alto + borde);               // 0 = base, 1 = tope
+          vec3 c = vec3(1.);
+          if (tt < .62) c = vec3(.72, .87, .98);
+          if (tt < .32) c = vec3(.54, .77, .95);
+          float luz = fbm(up*vec2(5., 7.) + vec2(1.7, 4.)) ;
+          if (tt > .55 && luz > .62) c = vec3(.80, .92, 1.);            // moteado de sombra dentro de la masa blanca
+          if (tt < .14) c = vec3(.44, .69, .92);                        // vientre
+          col = c;
         }
+        float sd = dot(d, uSol); col += cSolC * (step(.9955, sd)*.9 + step(.975, sd)*.12 + pow(max(sd, 0.), 24.)*.10);   // sol y su halo (según la hora)
+        // un par de nubes sueltas y pequeñas, también a los lados
+        float suelta = step(.78, fbm(floor(u*vec2(18., 22.))/vec2(18., 22.)*vec2(3., 4.) + 9.)) * lado * step(.50, y) * step(y, .78);
+        if (suelta > .5) col = mix(col, vec3(1.), .95);
         col = mix(col, cNie, smoothstep(.07, -.02, y));            // bruma baja del horizonte
         gl_FragColor = vec4(col*uTinte, 1.);
         #include <colorspace_fragment>

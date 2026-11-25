@@ -3,21 +3,21 @@
 export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
   const hN = huecosN.map(([a, b]) => new THREE.Vector2(a, b)), hS = huecosS.map(([a, b]) => new THREE.Vector2(a, b));
   const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-    uT: { value: 0 }, uTinte: { value: new THREE.Color('#ffffff') },
+    uT: { value: 0 }, uSolX: { value: -.45 }, uTinte: { value: new THREE.Color('#ffffff') },
     uMoto: { value: new THREE.Vector4(0, 0, 0, 1) }, uVel: { value: 0 },
     uHN: { value: hN }, uHS: { value: hS },
-    cHondo: { value: new THREE.Color('#2c8fa6') }, cMedio: { value: new THREE.Color('#43b0bd') }, cClaro: { value: new THREE.Color('#8fe0dc') }, cBlanco: { value: new THREE.Color('#f4fffb') },
+    cHondo: { value: new THREE.Color('#12b6d2') }, cMedio: { value: new THREE.Color('#3dd3de') }, cClaro: { value: new THREE.Color('#a6f5ee') }, cBlanco: { value: new THREE.Color('#f4fffb') },
   }]);
   const mat = new THREE.ShaderMaterial({
     uniforms: u, fog: true, transparent: true, depthWrite: false,
     vertexShader: `#include <fog_pars_vertex>
-      varying vec3 vL;
-      void main(){ vL = position; vec4 mvPosition = modelViewMatrix * vec4(position,1.); gl_Position = projectionMatrix * mvPosition;
+      varying vec3 vL, vW;
+      void main(){ vL = position; vW = (modelMatrix * vec4(position,1.)).xyz; vec4 mvPosition = modelViewMatrix * vec4(position,1.); gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
     fragmentShader: `#include <fog_pars_fragment>
-      varying vec3 vL;
-      uniform float uT, uVel; uniform vec3 uTinte, cHondo, cMedio, cClaro, cBlanco; uniform vec4 uMoto; uniform vec2 uHN[${hN.length}], uHS[${hS.length}];
+      varying vec3 vL, vW;
+      uniform float uT, uVel, uSolX; uniform vec3 uTinte, cHondo, cMedio, cClaro, cBlanco; uniform vec4 uMoto; uniform vec2 uHN[${hN.length}], uHS[${hS.length}];
       const float LEN = ${LEN.toFixed(1)}, A = ${W0.toFixed(1)}, B = ${W1.toFixed(1)};
       float hw(float z){ z = mod(z, LEN); if (z < 142.) return A; if (z < 156.) return A + (B-A)*smoothstep(0.,1.,(z-142.)/14.); if (z < 180.) return B; if (z < 194.) return B - (B-A)*smoothstep(0.,1.,(z-180.)/14.); return A; }
       float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -31,17 +31,22 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
       bool enHueco(float z, float side){ for (int k = 0; k < ${hN.length}; k++) if (side < 0. && z > uHN[k].x - 1. && z < uHN[k].y + 1.) return true;
         for (int k = 0; k < ${hS.length}; k++) if (side > 0. && z > uHS[k].x - 1. && z < uHS[k].y + 1.) return true; return false; }
       void main(){
-        float t = floor(uT*9.)/9.;                       // 9 fotogramas por segundo: animación "a pasos" como el pixel art
-        vec2 q = floor(vL.xz/.1)*.1;                    // píxel de agua = 16 cm
-        float tl = floor(uT*2.5)/2.5;
-        // manchas grandes de tono (3 niveles) + líneas de cáustica
-        float bl = sin(q.x*.55 + tl*.5 + sin(q.y*.8 - tl*.4)*1.7) * sin(q.y*.45 + tl*.35 + sin(q.x*.7 + tl*.3)*1.5);
-        float cs = caust(q*.75, t);
-        vec3 col = cHondo; float a = .74;
-        if (bl > -.15) { col = cMedio; a = .70; }
-        if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .66; }
-        if (cs > .80) { col = cClaro; a = .62; }
-        if (cs > .975) { col = cBlanco; a = .92; }
+        float t = floor(uT*5.)/5. * .30;                 // agua tranquila: 5 pasos por segundo y a un tercio de velocidad
+        vec2 q = floor(vL.xz/.1)*.1;                      // píxel de agua = 10 cm
+        float tl = floor(uT*2.)/2. * .35;
+        float z0 = vL.z, x0 = vL.x;
+        // sombra de los edificios del lado del sol: banda de borde escalonado que se adentra en el canal
+        float xq = floor(x0/.25)*.25; float ds = uSolX < 0. ? xq + hw(z0) : hw(z0) - xq;       // distancia al muro que tapa el sol (depende de la hora)
+        float sw = (1.2 + 9.*abs(uSolX)) * (.85 + .18*sin(floor(z0/.5)*.5*.13) + .12*step(.55, h21(vec2(floor(z0/3.), 7.))));
+        bool sombra = ds < sw && ds > -.5;
+        float bl = sin(q.x*.40 + tl*.5 + sin(q.y*.55 - tl*.4)*1.7) * sin(q.y*.32 + tl*.35 + sin(q.x*.5 + tl*.3)*1.5);
+        float cs = caust(q*.6, t);
+        vec3 col = cHondo; float a = .60;
+        if (bl > -.15) { col = cMedio; a = .54; }
+        if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .48; }
+        if (sombra) { col *= vec3(.55, .70, .78); a += .26; cs *= .55; }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
+        if (cs > .80) { col = sombra ? cMedio : cClaro; a = sombra ? .5 : .30; }
+        if (cs > .975) { col = cBlanco; a = .62; }
         // espuma: contra las fachadas (no en los callejones abiertos), alrededor del islote y en la estela de la moto
         float z = vL.z, x = vL.x, foam = 0., wet = 0.;
         float d = hw(z) - abs(x); bool abierto = enHueco(z, sign(x));
@@ -63,9 +68,11 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
         vec2 fw = uMoto.zw; vec2 lat = vec2(-fw.y, fw.x);   // (fw = dirección de la moto en x,z)
         float atras = -dot(dm, fw), lado = abs(dot(dm, lat)); float v = clamp(uVel/18., 0., 1.);
         if (atras > .8 && atras < 13. && v > .05) { float ab = .45 + atras*.2; float borde = abs(lado - ab);
-          float n = h21(floor(vec2(z*5., x*5.)) + floor(t*4.));
+          float n = h21(floor(vec2(z*5., x*5.)) + floor(uT*8.));
           foam += step(borde, .13 + .05*v) * step(.30 + atras*.03, n) * step(atras, 4. + 9.*v) + step(lado, .38) * step(atras, 2.5 + 3.*v) * step(.4, n); }
         col = mix(col, cClaro, wet*.45*step(.5, 1.-foam));
+        { vec3 V = normalize(cameraPosition - vW); float fr = pow(1. - clamp(V.y, 0., 1.), 3.);   // a ras de agua refleja el cielo: lejos más clara y opaca
+          col = mix(col, vec3(.62, .86, .98), fr*.65); a += fr*.35; }
         if (foam > .5) { col = cBlanco; a = .97; }
         col *= uTinte; a = clamp(a, 0., 1.);
         gl_FragColor = vec4(col, a);
@@ -97,7 +104,7 @@ export function crearEspumaMuro(THREE, { LEN, hw, huecosN, huecosS }) {
       varying vec2 vU; varying float vS; uniform float uT; uniform vec3 uTinte, cEsp, cSom, uHit;
       float h(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x*p.y); }
       void main(){
-        float t = floor(uT*9.)/9.; vec2 q = vec2(floor(vU.x*8.)/8., floor(vU.y*10.)/10.);       // píxeles de 12 cm x 11 cm
+        float t = floor(uT*5.)/5. * .30; vec2 q = vec2(floor(vU.x*8.)/8., floor(vU.y*10.)/10.);       // píxeles de 12 cm x 11 cm
         float onda = .5 + .5*sin(t*2.2 + q.x*.85 + sin(q.x*.31 + t)*2.);
         float dz = mod(q.x - uHit.x + 109., 218.) - 109.; float bo = (vS * uHit.z > 0. ? 1. : 0.) * exp(-dz*dz/9.) * max(0., 1. - (uT - uHit.y)/1.4);   // golpe de la moto: la espuma salta
         float top = .42 + .22*onda + bo*.55;                                                              // altura de la lengua de espuma (0..1)
