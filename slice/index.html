@@ -51,6 +51,7 @@ import { crearAguaMapa } from './agua2.js';
 import { hornear } from './mapa.js';
 import { torre109v2 as torre109 } from './torre109.js';
 import { fachada, vestir } from './plaza.js';
+import { crearSprites } from './sprites.js';
 
 const VERSION = 'Tramo v2 · salida frente a la 109';
 // Torre 109: del sitio original (TCO) a un punto 116 m por delante de la salida (TCN); plaza abierta alrededor; bloques del fondo más altos (referencia 06)
@@ -166,24 +167,14 @@ for (const k of Object.keys(inst)) inst[k] = inst[k].filter(v => Math.hypot(v[0]
 scene.add(torre109(THREE, TCN, 12, 62));
 // ---------------- mapa horneado: sombras del sol y distancia a muros (una vez al cargar)
 progreso('Horneando sombras…');
-{ const t0 = performance.now(); const mp = hornear(THREE, renderer, scene, { x0: -420, z0: -230, sx: 520, sz: 250 }, SOLDIR); AGUA.u.uSh.value = mp.tex; AGUA.u.uBox.value.copy(mp.box); window.__BAKE_MS = Math.round(performance.now() - t0);
+{ const t0 = performance.now(); const mp = hornear(THREE, renderer, scene, { x0: -420, z0: -230, sx: 520, sz: 250 }, SOLDIR); AGUA.u.uSh.value = mp.tex; AGUA.u.uBox.value.copy(mp.box); window.__BAKE_MS = Math.round(performance.now() - t0); window.__MAPA = mp;
   if (new URLSearchParams(location.search).has('dbg')) { const W = mp.rt.width, H = mp.rt.height, px = new Uint8Array(W * H * 4); renderer.readRenderTargetPixels(mp.rt, 0, 0, W, H, px); const c = document.createElement('canvas'); c.width = W; c.height = H; c.style.cssText = 'position:fixed;left:0;bottom:0;width:480px;height:' + Math.round(480 * H / W) + 'px;z-index:9;border:2px solid #f0f;image-rendering:pixelated'; const g = c.getContext('2d'), im = g.createImageData(W, H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = ((H - 1 - y) * W + x) * 4, b = (y * W + x) * 4; im.data[b] = px[a] * 255 / 255; im.data[b + 1] = px[a + 1]; im.data[b + 2] = Math.min(255, px[a + 2] * 4); im.data[b + 3] = 255; } g.putImageData(im, 0, 0); document.body.appendChild(c); } }
 // ---------------- pista (centro, ancho, normales) para colisiones y vueltas
 const P = pista.puntos.map(([x, z, w]) => ({ x, z, w })), N = P.length;
 P.forEach((a, i) => { const b = P[(i + 1) % N], c = P[(i - 1 + N) % N]; let tx = b.x - c.x, tz = b.z - c.z; const l = Math.hypot(tx, tz) || 1; a.tx = tx / l; a.tz = tz / l; a.nx = -a.tz; a.nz = a.tx; });
 const OB = pista.obstaculos.map(([x, z, r]) => ({ x, z, r }));
-// ---------------- vestido de la plaza de salida: árboles de primer plano a ambos lados, poste con cables, cartel azul y señal (tarjetas pixel)
-{ const ld = new THREE.TextureLoader(), tx = n => { const t = ld.load('art/' + n + '.png'); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; };
-  const mats = {}, mt = n => mats[n] ||= new THREE.MeshLambertMaterial({ map: tx(n), alphaTest: .45, side: THREE.DoubleSide, emissive: '#3b3b34' });
-  const prop = (n, h, i, off, ry = 0, cruz = false) => { const p = P[i], sx = p.x + p.nx * off, sz = p.z + p.nz * off, yaw = Math.atan2(p.tx, p.tz); const img = { calle_03: [169, 117], calle_04: [82, 112], calle_05: [52, 120], arboles_04: [0, 0] }[n]; let ar = 1; const im = new Image(); 
-    const mk = (rot) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(h * ar, h), mt(n)); m.position.set(sx, h / 2 - .4, sz); m.rotation.y = rot; scene.add(m); }; 
-    const a = { calle_03: 169 / 117, calle_04: 82 / 112, calle_05: 52 / 120 }[n] || 1.4; ar = a; mk(yaw + Math.PI / 2); if (cruz) mk(yaw); };
-  const w = i => P[i].w / 2;
-  const arb = ['arboles_04', 'arboles_05', 'arboles_06', 'arboles_07'];
-  [[121, -1, 1.2, 10], [123, 1, 1.0, 11], [152, -1, 3.0, 8], [158, 1, 3.0, 8]].forEach(([i, sd, ins, h], k) => { const n = arb[k % 4]; const p = P[i]; const off = sd * (w(i) - ins); const sx = p.x + p.nx * off, sz = p.z + p.nz * off; for (const rot of [0, Math.PI / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(h * 1.25, h), mt(n)); m.position.set(sx, h / 2 - .6, sz); m.rotation.y = rot + k; scene.add(m); } });
-  prop('calle_03', 12, 134, w(134) - 2.2, 0, false); prop('calle_04', 6, 128, -(w(128) - 2.6), 0, true); prop('calle_05', 4.2, 142, -(w(142) - 2.2), 0, true);
-}
-vestir(THREE, scene, P, w => w, null);
+vestir(THREE, scene, P);
+progreso('Colocando sprites…'); { const t0 = performance.now(); const sp = await crearSprites(THREE, scene, P, window.__MAPA, { desde: 30, hasta: 430 }); window.__SPR = sp.cartas + ' cartas · ' + Math.round(sp.tris) + ' tri · ' + Math.round(performance.now() - t0) + ' ms'; }
 // ---------------- elementos de juego sobre el trazado: plataformas de TURBO y RAMPAS de salto (en los tramos mas rectos)
 function recta(f) {
   let mejor = Math.floor(f * N) % N, mc = 1e9;
@@ -348,7 +339,7 @@ function frame() {
     fps = fpsN / fpsT; fpsN = 0; fpsT = 0;
     if (fps < 40 && pr > .6) { pr = Math.max(.6, pr - .1); renderer.setPixelRatio(pr); } else if (fps > 57 && pr < PR_MAX) { pr = Math.min(PR_MAX, pr + .05); renderer.setPixelRatio(pr); }
     const inf = renderer.info.render;
-    hudP.innerHTML = `${VERSION}<br>${fps.toFixed(0)} fps · ${inf.calls} llamadas<br>${(inf.triangles / 1000).toFixed(0)}k triángulos · res ${pr.toFixed(2)}<br>horneado ${window.__BAKE_MS} ms`;
+    hudP.innerHTML = `${VERSION}<br>${fps.toFixed(0)} fps · ${inf.calls} llamadas<br>${(inf.triangles / 1000).toFixed(0)}k triángulos · res ${pr.toFixed(2)}<br>horneado ${window.__BAKE_MS} ms · sprites ${window.__SPR}`;
   }
   const tc = estado.t0 === null ? 0 : t - estado.t0;
   hudC.textContent = estado.vuelta > VUELTAS ? `¡Meta! ${fmt(estado.tv)} · mejor vuelta ${fmt(estado.mejor)}` : `Vuelta ${estado.vuelta}/${VUELTAS} · ${fmt(tc - estado.tv)} · mejor ${fmt(estado.mejor)}`;

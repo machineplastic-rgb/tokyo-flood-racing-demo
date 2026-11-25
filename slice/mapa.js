@@ -37,5 +37,7 @@ export function hornear(THREE, renderer, scene, box, sol) {
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), matS), esc = new THREE.Scene(); esc.add(quad);
   renderer.setRenderTarget(rtS); renderer.render(esc, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)); renderer.setRenderTarget(antes);
   rtH.dispose(); matS.dispose(); matH.dispose();
-  return { rt: rtS, tex: rtS.texture, box: new THREE.Vector4(box.x0, box.z0, box.sx, box.sz) };
+  const Wp = rtS.width, Hp = rtS.height, buf = new Uint8Array(Wp * Hp * 4); renderer.readRenderTargetPixels(rtS, 0, 0, Wp, Hp, buf);
+  const altura = (x, z) => { const cx = Math.floor((x - box.x0) / box.sx * Wp), cr = Math.floor((1 - (z - box.z0) / box.sz) * Hp); if (cx < 0 || cx >= Wp || cr < 0 || cr >= Hp) return 0; return buf[(cr * Wp + cx) * 4 + 2] / 255 * 64; };
+  return { altura, rt: rtS, tex: rtS.texture, box: new THREE.Vector4(box.x0, box.z0, box.sx, box.sz) };
 }
