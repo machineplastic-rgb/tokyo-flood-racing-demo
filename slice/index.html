@@ -22,10 +22,10 @@
   #bCam{right:8px} #bAuto{right:88px} #bReset{right:172px}
   #carga{position:fixed;inset:0;display:grid;place-items:center;background:#e8eef0;font:600 16px system-ui;color:#22262b;text-align:center;padding:16px}
   #girar{display:none;position:fixed;inset:0;background:#22262bee;color:#f3ebdd;place-items:center;font:600 18px system-ui;text-align:center;padding:24px}
-  @media (orientation:portrait) and (pointer:coarse){#girar{display:grid}}
+  
   @media (pointer:fine){.btn{display:none}}
-  .stick{position:fixed;bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:#ffffff22;border:2px solid #ffffff66;touch-action:none;display:none;z-index:5}
-  .stick i{position:absolute;left:43px;top:43px;width:64px;height:64px;border-radius:50%;background:#ffffff88;border:2px solid #ffffffcc}
+  .stick{position:fixed;bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:transparent;border:0;touch-action:none;display:none;z-index:5}
+  .stick i{position:absolute;left:43px;top:43px;width:64px;height:64px;border-radius:50%;background:#ffffff44;border:2px solid #ffffff66}
   #stL{left:max(22px,env(safe-area-inset-left))} #stR{right:max(22px,env(safe-area-inset-right))}
   .stick b{position:absolute;left:0;right:0;text-align:center;font:600 10px system-ui;color:#fff;opacity:.7}
   .stick b.u{top:6px}.stick b.d{bottom:6px}
@@ -41,12 +41,12 @@
 </head>
 <body>
 <div id="carga">Cargando Shibuya…</div>
-<div id="girar">Gira el móvil en horizontal</div>
+
 <div id="perf" class="hud"></div>
 <div id="carrera" class="hud"></div>
 <div id="zona" class="hud"></div>
 <div id="vel" class="hud"></div>
-<div id="stL" class="stick"><i></i></div><div id="stR" class="stick"><b class="u">GAS</b><b class="d">FRENO · ATRÁS</b><i></i></div>
+<div id="stL" class="stick"><i></i></div><div id="stR" class="stick"><i></i></div>
 <div id="izq" class="btn">◀</div><div id="der" class="btn">▶</div>
 <div id="freno" class="btn">FRENO<br>DERRAPE</div><div id="gas" class="btn">GAS</div>
 <button id="bCam" class="mini">Cámara</button><button id="bAuto" class="mini">Auto-gas</button><button id="bReset" class="mini">Reset</button>
