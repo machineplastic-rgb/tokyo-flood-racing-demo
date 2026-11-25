@@ -37,18 +37,25 @@ export function torre109v2(THREE, c, R, H) {
   const tx = (u, rx, ry) => { const t = nt(L.load(u)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return t; };
   const crop = (fx0, fy0, fx1, fy1) => { const cv = document.createElement('canvas'), t = nt(new THREE.CanvasTexture(cv)); const dib = () => { const W = img.naturalWidth, Hh = img.naturalHeight, x0 = fx0 * W, y0 = fy0 * Hh, w = (fx1 - fx0) * W, h = (fy1 - fy0) * Hh; cv.width = Math.round(w); cv.height = Math.round(h); cv.getContext('2d').drawImage(img, x0, y0, w, h, 0, 0, cv.width, cv.height); t.needsUpdate = true; t.dispose(); }; if (img.complete && img.naturalWidth) dib(); else img.addEventListener('load', dib); return t; };
   const sol = (map, color) => new THREE.MeshLambertMaterial({ map, color: color || '#ffffff', emissive: '#4a463d' });
-  const wing = (s) => {                                      // s = +1 izquierda, -1 derecha (mirando desde la salida)
-    const zc = c.z + s * (R + 11), W = 26, D = 24, xf = c.x + R * .55;     // frente del ala a 8 m del eje; fondo 24 m
-    const parte = (x0, x1, y0, y1, mat) => { const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, W), mat); b.position.set((x0 + x1) / 2, (y0 + y1) / 2, zc); b.userData.ciudad = true; g.add(b); return b; };
-    const hor = sol(tx('art/hormigon_oxido.png', 6, 6), '#ffffff'), azu = sol(tx('art/azulejo_gris_grieta.png', 6, 8), '#ffffff');
-    parte(xf - D, xf, -4, 24, azu);                          // cuerpo bajo (planta de ventanal: la cara frontal se cubre con cristal)
-    parte(xf - D, xf + 6, 24, 37, hor);                      // voladizo de hormigón (se adelanta 6 m)
-    const vt = tx('art/cristal_roto.png', 4, 1); const vid = new THREE.Mesh(new THREE.PlaneGeometry(W - 2, 20), new THREE.MeshLambertMaterial({ map: vt, emissive: '#3a4650', alphaTest: .4 })); vid.position.set(xf + .15, 10, zc); vid.rotation.y = Math.PI / 2; g.add(vid);
-    const ala = new THREE.Mesh(new THREE.PlaneGeometry(W, W * 362 / 455 * 1.1), new THREE.MeshLambertMaterial({ map: tx('art/ala_aband.png', 1, 1), emissive: '#4a463d', alphaTest: .4, side: THREE.DoubleSide })); ala.position.set(xf + 6.2, 27, zc); ala.rotation.y = Math.PI / 2; g.add(ala);
-    for (const dz of [-W / 2 + 1.5, W / 2 - 1.5]) { const p = new THREE.Mesh(new THREE.BoxGeometry(2.2, 28, 3), azu); p.position.set(xf + .6, 10, zc + dz); p.userData.ciudad = true; g.add(p); }   // pilares laterales
-    return zc;
+  // alas: dos volúmenes en V que se alejan en diagonal desde el cilindro (como el edificio real); se construye la del lado +Z y se refleja para el otro
+  const wingGroup = (sg) => {
+    const ph = 38 * Math.PI / 180, L = 44, T = 11, HW = 38, wg = new THREE.Group();
+    const e = new THREE.Vector3(Math.cos(ph), 0, -sg * Math.sin(ph)), n = new THREE.Vector3(Math.sin(ph), 0, sg * Math.cos(ph));
+    wg.matrix.makeBasis(e, new THREE.Vector3(0, 1, 0), n).setPosition(c.x + R * n.x, 0, c.z + R * n.z); wg.matrixAutoUpdate = false;
+    const hor = sol(tx('art/hormigon_oxido.png', 8, 8), '#ffffff'), azu = sol(tx('art/azulejo_b.png', 14, 14), '#ffffff');
+    const caja = (x0, x1, y0, y1, z0, z1, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); m.userData.ciudad = true; wg.add(m); return m; };
+    caja(-L, 3, -4, HW, -T, 0, azu);                                  // cuerpo
+    caja(-L, 3, HW - 12, HW - 8, 0, 5.5, hor);                        // voladizo de hormigón (5,5 m)
+    caja(-L, 3, HW - 3.2, HW + .6, -T, 1.2, hor);                     // remate
+    const vt = tx('art/cristal_roto.png', 7, 1), vid = new THREE.Mesh(new THREE.PlaneGeometry(L + 3 - 2, HW - 13), new THREE.MeshLambertMaterial({ map: vt, emissive: '#3a4650', alphaTest: .4 })); vid.position.set(-L / 2 + 1.5, (HW - 13) / 2 - 3, .06); wg.add(vid);
+    const ala = new THREE.Mesh(new THREE.PlaneGeometry(L + 3, 12), new THREE.MeshLambertMaterial({ map: tx('art/ala_aband.png', 2, 1), emissive: '#4a463d', alphaTest: .4, side: THREE.DoubleSide })); ala.position.set(-L / 2 + 1.5, HW - 18, 5.6); wg.add(ala);
+    return wg;
   };
-  wing(1); const zr = wing(-1);
+  g.add(wingGroup(1)); g.add(wingGroup(-1));
+  // diorama: tarjetas con las piezas pintadas de Marcos (hoja 3) delante de los volúmenes; la luz y las lianas ya van en el dibujo
+  { const card = (img, w, h, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: tx('art/' + img + '.png', 1, 1), color: '#ffffff', emissive: '#8a8678', alphaTest: .4, side: THREE.DoubleSide })); m.position.set(x, y, z); m.rotation.y = ry; g.add(m); };
+    card('cil_hoja', 2 * R * .98, 2 * R * .98 * 665 / 300, c.x + R + .5, 2 * R * .98 * 665 / 300 / 2, c.z, Math.PI / 2); }
+
   // cascada del voladizo derecho (animada: rayas verticales que bajan) + salpicadura
   { const cv = document.createElement('canvas'); cv.width = 16; cv.height = 64; const x = cv.getContext('2d'); x.fillStyle = '#bfe8f2'; x.fillRect(0, 0, 16, 64); for (let i = 0; i < 40; i++) { x.fillStyle = Math.random() < .5 ? '#ffffff' : '#7fc6dc'; x.fillRect((Math.random() * 16) | 0, (Math.random() * 64) | 0, 2, 6 + ((Math.random() * 10) | 0)); }
     const t = nt(new THREE.CanvasTexture(cv)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 3);

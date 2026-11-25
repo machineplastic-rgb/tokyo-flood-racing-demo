@@ -18,12 +18,12 @@ export function crearCielo(THREE, H, solPos) {
         vec3 col = mix(cHor, cMid, smoothstep(0., .25, y)); col = mix(col, cTop, smoothstep(.25, .85, y));
         // nubes grandes SOLO a los lados (a lo largo del canal se ve cielo limpio): cúmulos de base plana, tope blanco y sombra azul clara
         float az = atan(d.z, d.x);                                   // ángulo horizontal
-        float lado = smoothstep(.08, .42, abs(d.x) / max(.001, length(d.xz)));    // 0 mirando a lo largo del canal, 1 mirando hacia los lados
+        float lado = .30 + .70 * smoothstep(.08, .42, abs(d.x) / max(.001, length(d.xz)));    // 0 mirando a lo largo del canal, 1 mirando hacia los lados
         float deriva = uT*.004;
         vec2 u = vec2(az*3. + deriva, y*2.6);
         vec2 up = floor(u*vec2(26., 30.))/vec2(26., 30.);               // píxel de nube
         float nb = fbm(up*vec2(2.2, 3.4) + vec2(3., 0.)), nc = fbm(vec2(up.x*1.1 + deriva*.5, 5.));
-        float base = .24, alto = lado * (.30 + .50*nc);               // altura del cúmulo según la columna
+        float base = .20, alto = lado * (.34 + .55*nc);               // altura del cúmulo según la columna
         float borde = (nb - .5) * .22;
         float masa = step(base, y) * step(y, base + alto + borde) * step(.05, lado);
         if (y > .01 && masa > .5) {
