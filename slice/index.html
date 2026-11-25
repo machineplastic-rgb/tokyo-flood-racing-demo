@@ -166,7 +166,7 @@ for (const k of Object.keys(inst)) inst[k] = inst[k].filter(v => Math.hypot(v[0]
   }
 }
 
-{ const T = torre109(THREE, TCN, 12, 62); T.updateMatrixWorld(true); const bucket = new Map(), keep = [];
+if (!new URLSearchParams(location.search).has('notorre')) { const T = torre109(THREE, TCN, 12, 62); T.updateMatrixWorld(true); const bucket = new Map(), keep = [];
   T.traverse(o => { if (!o.isMesh) return; if (o.onBeforeRender && o.onBeforeRender.toString().length > 40) { keep.push(o); return; } const m = o.material; if (!bucket.has(m)) bucket.set(m, []); let g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld); if (g.index) g = g.toNonIndexed(); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); if (!g.attributes.normal) g.computeVertexNormals(); bucket.get(m).push(g); });
   for (const [m, gs] of bucket) { const me = new THREE.Mesh(mergeGeometries(gs), m); me.userData.ciudad = !!(m.alphaTest ? false : true); scene.add(me); }
   for (const o of keep) { o.updateWorldMatrix(true, false); o.matrixAutoUpdate = false; o.matrix.copy(o.matrixWorld); scene.add(o); } }
@@ -179,7 +179,7 @@ const P = pista.puntos.map(([x, z, w]) => ({ x, z, w })), N = P.length;
 P.forEach((a, i) => { const b = P[(i + 1) % N], c = P[(i - 1 + N) % N]; let tx = b.x - c.x, tz = b.z - c.z; const l = Math.hypot(tx, tz) || 1; a.tx = tx / l; a.tz = tz / l; a.nx = -a.tz; a.nz = a.tx; });
 const OB = pista.obstaculos.map(([x, z, r]) => ({ x, z, r }));
 vestir(THREE, scene, P);
-progreso('Colocando sprites…'); { const t0 = performance.now(); const sp = await crearSprites(THREE, scene, P, window.__MAPA, { desde: 30, hasta: 430 }); window.__SPR = sp.cartas + ' cartas · ' + Math.round(sp.tris) + ' tri · ' + Math.round(performance.now() - t0) + ' ms'; }
+progreso('Colocando sprites…'); { const t0 = performance.now(); const sp = await crearSprites(THREE, scene, P, window.__MAPA, { excluir: { x: TCN.x, z: TCN.z, r: 55 }, desde: 30, hasta: 430, audit: +(new URLSearchParams(location.search).get('audit') || 0) }); if (new URLSearchParams(location.search).has('nospr')) sp.mesh.visible = false; window.__SPR = sp.cartas + ' cartas · ' + Math.round(sp.tris) + ' tri · ' + Math.round(performance.now() - t0) + ' ms'; }
 // ---------------- elementos de juego sobre el trazado: plataformas de TURBO y RAMPAS de salto (en los tramos mas rectos)
 function recta(f) {
   let mejor = Math.floor(f * N) % N, mc = 1e9;

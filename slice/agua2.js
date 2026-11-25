@@ -34,15 +34,17 @@ export function crearAguaMapa(THREE) {
         if (cs > .40) { col = sombra ? vec3(.03, .36, .30) : cClaro; a = sombra ? .95 : .70; }
         if (cs > .86) { col = sombra ? vec3(.05, .48, .40) : mix(cClaro, cBlanco, .35); a = sombra ? .95 : .85; }
         // espuma pegada a los muros (distancia horneada)
+        float LW = 1.15 + 1.1*smoothstep(.3, .7, h21(floor(q*.7) + 3.)); float wf = max(wd - LW, 0.);
         float foam = 0., wet = 0.;
         if (wd < 3.4) { float n = h21(floor(q*11.) + floor(t*3.)); float onda = .5 + .5*sin(t*2.2 + q.y*.85 + q.x*.3 + sin(q.y*.31 + t)*2.);
-          foam += step(wd, .45 + .55*onda); float w2 = 1.5 + .45*sin(t*1.5 + q.y*.5 + q.x*.4 + 1.3);
+          foam += step(wf, .30 + .40*onda) * step(LW, wd); float w2 = 1.5 + .45*sin(t*1.5 + q.y*.5 + q.x*.4 + 1.3);
           foam += step(abs(wd - w2), .13) * step(.42, n); wet = smoothstep(2.4, 0., wd); }
         // estela de la moto
         vec2 dm = q - uMoto.xy; vec2 fw = uMoto.zw; float atras = -dot(dm, fw), lado = abs(dot(dm, vec2(-fw.y, fw.x))); float v = clamp(uVel/18., 0., 1.);
         if (atras > .8 && atras < 13. && v > .05) { float ab = .45 + atras*.2; float n = h21(floor(q*11.) + floor(uT*8.));
           foam += step(abs(lado - ab), .13 + .05*v) * step(.30 + atras*.03, n) * step(atras, 4. + 9.*v) + step(lado, .38) * step(atras, 2.5 + 3.*v) * step(.4, n); }
         col = mix(col, cClaro, wet*.45*step(.5, 1. - foam));
+        if (wd < LW) { float gr = h21(floor(q*7.) + 5.); vec3 g = gr < .20 ? vec3(.17,.40,.14) : gr < .62 ? vec3(.30,.62,.20) : gr < .86 ? vec3(.46,.78,.26) : vec3(.62,.56,.40); col = sombra ? g*.55 : g; a = 1.; foam = 0.; }   // orilla emergida: hierba y tierra
         if (foam > .5) { col = cBlanco; a = .97; }
         // sombra de la moto (velo translúcido)
         if (!sombra) { vec2 sd = -uSol.xz / uSol.y; vec2 mc = uMoto.xy + sd*1.2; vec2 d2 = q - mc; float al = dot(d2, fw), la = dot(d2, vec2(-fw.y, fw.x)); col = mix(col, col*vec3(.46, .66, .78), .9*step(al*al/4.4 + la*la/.8, 1.)); }

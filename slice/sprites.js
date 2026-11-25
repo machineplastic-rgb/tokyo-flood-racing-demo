@@ -103,49 +103,62 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
   for (const sd of [-1, 1]) {
     let i = desde;
     while (i < hasta) {
-      const id = pick(R() < .35 ? ALTOS : BAJOS), h = alto('edificios', id) * 1.25, r = rect['edificios' + id]; if (!r) { i += 6; continue; }
-      const w = h * r.w / r.h, ic = Math.min(P.length - 1, Math.round(i + w / 2)), t = muro(ic, sd);
+      const id = pick(R() < .35 ? ALTOS : BAJOS), h0 = alto('edificios', id) * 1.25, r = rect['edificios' + id]; if (!r) { i += 6; continue; }
+      const w = h0 * r.w / r.h, ic = Math.min(P.length - 1, Math.round(i + w / 2)), t = muro(ic, sd);
       if (t == null) { i += 8; continue; }
       const p = P[ic], [tx, tz] = sdir(ic), px = p.x + p.nx * sd * (t - .15), pz = p.z + p.nz * sd * (t - .15);
+      const h = Math.max(mapa.altura(p.x + p.nx * sd * (t + 1.2), p.z + p.nz * sd * (t + 1.2)), mapa.altura(p.x + p.nx * sd * (t + 3), p.z + p.nz * sd * (t + 3)));   // altura REAL de la fachada
+      if (h < 6) { i += 6; continue; }
+      if (opciones.excluir && Math.hypot(px - opciones.excluir.x, pz - opciones.excluir.z) < opciones.excluir.r) { i += Math.max(5, w * .92); continue; }   // alrededor de la 109 los muros son diagonales: la torre lleva sus propios detalles
+      const dentro = (y, alt) => Math.min(y, h - alt - .3);   // nada pasa de la azotea
       // los de la cara que mira al sol, más claros; los de sombra, más fríos
       const lit = Math.max(0, -sd * (p.nx * SOLV[0] + p.nz * SOLV[2])), c = .62 + .55 * Math.min(1, lit * 2.4);
       if (opciones.edificios) carta('edificios' + id, px, Y0, pz, tx, tz, h, { tinte: [c * (.94 + .06 * lit), c, c * (1.04 - .06 * lit)] }); nCartas++;   // los sprites de edificio vienen en perspectiva: desactivados (pendiente fachadas planas)
       // detalles en la base del edificio: máquinas, plantas, rótulos y lianas
       const d1 = R();
-      if (d1 < .75) carta('plantas' + pick(PLANTAS), px - p.nx * sd * (.5 + R() * .6) + tx * (R() - .5) * w * .7, -.35, pz - p.nz * sd * (.5 + R() * .6) + tz * (R() - .5) * w * .7, tx, tz, alto('plantas', '08') * (.8 + R() * 1.2), { sway: .05 });
-      if (R() < .5) { const k = pick(['01', '02', '03', '04', '05', '06', '07', '14', '16', '17']); carta('maquinas' + k, px - p.nx * sd * .25 + tx * (R() - .5) * w * .6, -.25, pz - p.nz * sd * .25 + tz * (R() - .5) * w * .6, tx, tz, alto('maquinas', k)); }
-      for (let n = 0; n < 3 && SGK.length; n++) { if (R() > .8) continue; const k = pick(SGK), rh = SG.hs[k], hor = k.startsWith('sg05') || k.startsWith('sg06') || k.startsWith('sg07') || k.startsWith('sg09'); const yy = hor ? 3 + R() * Math.max(2, h * .5) : 2.5 + R() * Math.max(2, h * .45); carta(k, px - p.nx * sd * .14 + tx * (R() - .5) * w * .75, yy, pz - p.nz * sd * .14 + tz * (R() - .5) * w * .75, tx, tz, rh); }
+      if (d1 < .75) carta('plantas' + pick(PLANTAS), px - p.nx * sd * (.5 + R() * .6) + tx * (R() - .5) * w * .7, -.1, pz - p.nz * sd * (.5 + R() * .6) + tz * (R() - .5) * w * .7, tx, tz, alto('plantas', '08') * (.8 + R() * 1.2), { sway: .05 });
+      if (R() < .5) { const k = pick(['01', '02', '03', '04', '05', '06', '07', '14', '16', '17']); carta('maquinas' + k, px - p.nx * sd * .25 + tx * (R() - .5) * w * .6, -.1, pz - p.nz * sd * .25 + tz * (R() - .5) * w * .6, tx, tz, alto('maquinas', k)); }
+      for (let n = 0; n < 3 && SGK.length; n++) { if (R() > .8) continue; const k = pick(SGK), rh = SG.hs[k], hor = k.startsWith('sg05') || k.startsWith('sg06') || k.startsWith('sg07') || k.startsWith('sg09'); let yy = hor ? 3 + R() * Math.max(2, h * .5) : 2.5 + R() * Math.max(2, h * .45); yy = dentro(yy, rh); if (yy < 1.5) continue; carta(k, px - p.nx * sd * .14 + tx * (R() - .5) * w * .75, yy, pz - p.nz * sd * .14 + tz * (R() - .5) * w * .75, tx, tz, rh); }
       // pantallas gigantes en lo alto (35 %) y pantallas medias; casi siempre con una cortina de lianas encima
-      if (R() < .55) { const sk = 'scr' + ((R() * 5) | 0), sw = 11 + R() * 10, sy = Math.max(6, h * (.45 + R() * .4)); carta(sk, px - p.nx * sd * .2 + tx * (R() - .5) * w * .4, sy, pz - p.nz * sd * .2 + tz * (R() - .5) * w * .4, tx, tz, sw * .42, { w: sw });
-        if (R() < .7) carta('lianas' + pick(['01', '02', '03', '05', '06']), px - p.nx * sd * .26 + tx * (R() - .5) * w * .4, sy - 5, pz - p.nz * sd * .26 + tz * (R() - .5) * w * .4, tx, tz, 12 + R() * 6, { sway: .03 }); }
+      if (R() < .55) { const sk = 'scr' + ((R() * 5) | 0), sw = 11 + R() * 10, sy = Math.max(4, dentro(h * (.45 + R() * .4), sw * .42)); if (h < sw * .42 + 5) continue; carta(sk, px - p.nx * sd * .2 + tx * (R() - .5) * w * .4, sy, pz - p.nz * sd * .2 + tz * (R() - .5) * w * .4, tx, tz, sw * .42, { w: sw });
+        if (R() < .7) carta('lianas' + pick(['01', '02', '03', '05', '06']), px - p.nx * sd * .26 + tx * (R() - .5) * w * .4, Math.max(0, sy - 5), pz - p.nz * sd * .26 + tz * (R() - .5) * w * .4, tx, tz, 12 + R() * 6, { sway: .03 }); }
       // FOLLAJE EN VOLUMEN: masas que sobresalen de la cornisa y la azotea, árboles sobre repisas, ramas que brotan de ventanas, cortinas colgantes y hierba al pie
       const fx = (dx, dz) => [px - p.nx * sd * dz + tx * dx, pz - p.nz * sd * dz + tz * dx];
-      for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w * .9, .4 + R() * 2.4), kk = pick([1, 1, 1, 2, 2]), fh = alto('fol', kk) * (.8 + R() * .7); carta('fol' + kk, f[0], h * .94 - fh * .10, f[1], tx, tz, fh * 1.25, { sway: .015 }); }          // corona de azotea: sobresale por encima
-      for (let n = 0; n < 3; n++) if (R() < .75) { const f = fx((R() - .5) * w * .9, .3 + R()), fh = alto('fol', 2) * (.9 + R() * .6); carta('fol2', f[0], 5 + R() * Math.max(2, h * .8), f[1], tx, tz, fh, { sway: .015 }); }   // voladizo en cornisas intermedias
-      for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .85, .3), fh = alto('fol', 3) * (.7 + R() * .5); carta('fol3', f[0], 4 + R() * Math.max(2, h * .6), f[1], tx, tz, fh, { sway: .01 }); }       // árbol sobre repisa
-      for (let n = 0; n < 3; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .25), fh = alto('fol', 6); carta('fol6', f[0], 3 + R() * Math.max(2, h * .7), f[1], tx, tz, fh, { sway: .02 }); }                           // ramas de ventana
-      for (let n = 0; n < 2; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 4) * (.9 + R() * .8); carta('fol4', f[0], h * .93 - fh * .8, f[1], tx, tz, fh, { sway: .03 }); }                      // cortina colgante
-      for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 7) * (.7 + R() * .8); carta('fol7', f[0], -.3, f[1], tx, tz, fh, { sway: .01 }); }                                   // columna de hiedra
-      for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w, .1 + R() * .8), kk = pick([5, 5, 8]); carta('fol' + kk, f[0], -.4, f[1], tx, tz, alto('fol', kk) * (.8 + R() * .5), { sway: .012 }); }      // arbustos y hierba al pie
+      for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w * .9, -3 + R() * 3.4), kk = pick([1, 1, 1, 2, 2]), fh = alto('fol', kk) * (.8 + R() * .7); carta('fol' + kk, f[0], h - .4, f[1], tx, tz, fh * 1.25, { sway: .015 }); }          // corona de azotea: sobresale por encima
+      for (let n = 0; n < 3; n++) if (R() < .75) { const f = fx((R() - .5) * w * .9, .3 + R()), fh = alto('fol', 2) * (.9 + R() * .6); carta('fol2', f[0], Math.max(3, dentro(5 + R() * Math.max(2, h * .8), fh)), f[1], tx, tz, fh, { sway: .015 }); }   // voladizo en cornisas intermedias
+      for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .85, .3), fh = alto('fol', 3) * (.7 + R() * .5); carta('fol3', f[0], Math.max(3, dentro(4 + R() * Math.max(2, h * .6), fh)), f[1], tx, tz, fh, { sway: .01 }); }       // árbol sobre repisa
+      for (let n = 0; n < 3; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .25), fh = alto('fol', 6); carta('fol6', f[0], Math.max(2.5, dentro(3 + R() * Math.max(2, h * .7), fh)), f[1], tx, tz, fh, { sway: .02 }); }                           // ramas de ventana
+      for (let n = 0; n < 2; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 4) * (.9 + R() * .8); carta('fol4', f[0], Math.max(0, h - fh - .4), f[1], tx, tz, fh, { sway: .03 }); }                      // cortina colgante
+      for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 7) * (.7 + R() * .8); carta('fol7', f[0], -.1, f[1], tx, tz, fh, { sway: .01 }); }                                   // columna de hiedra
+      for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w, .1 + R() * .8), kk = pick([5, 5, 8]); carta('fol' + kk, f[0], -.1, f[1], tx, tz, alto('fol', kk) * (.8 + R() * .5), { sway: .012 }); }      // arbustos y hierba al pie
       // SELVA (referencia: palmeras y plantas gigantes al pie y en la azotea, tapando la base)
-      for (let n = 0; n < 3; n++) if (R() < .8) { const f = fx((R() - .5) * w * .95, .3 + R() * 1.4), kk = pick([1, 2, 2, 1, 7]), jh = alto('jun', kk) * (.75 + R() * .6); carta('jun' + kk, f[0], -.5, f[1], tx, tz, jh, { sway: .012 }); }          // palmeras y coníferas al pie
-      for (let n = 0; n < 4; n++) if (R() < .9) { const f = fx((R() - .5) * w, .2 + R() * 1.2), kk = pick([3, 3, 4, 4]), jh = alto('jun', kk) * (.8 + R() * .8); carta('jun' + kk, f[0], -.5, f[1], tx, tz, jh, { sway: .01 }); }                    // plantas tropicales grandes
-      for (let n = 0; n < 2; n++) if (R() < .75) { const f = fx((R() - .5) * w * .9, .5 + R() * 2), kk = pick([1, 2]), jh = alto('jun', kk) * (.55 + R() * .35); carta('jun' + kk, f[0], h * .93, f[1], tx, tz, jh, { sway: .02 }); }                          // palmeras asomando en la azotea
-      if (R() < .6) { const f = fx((R() - .5) * w, .2), jh = 9 + R() * 8; carta('jun5', f[0], h * .9 - jh, f[1], tx, tz, jh, { sway: .03 }); }                                                                                              // liana gruesa colgando
-      if (R() < .8) { const f = fx((R() - .5) * w, .1), jh = 2.2 + R() * 1.6; carta('jun8', f[0], -.5, f[1], tx, tz, jh, { w: w * .9 }); }                                                                                                      // pradera con flores
-      if (R() < .75) { const k = pick(['01', '02', '03', '05', '06', '08']); const lh = alto('lianas', k) * (.9 + R() * .9); carta('lianas' + k, px - p.nx * sd * .08 + tx * (R() - .5) * w * .8, h * .94 - lh + 1, pz - p.nz * sd * .08 + tz * (R() - .5) * w * .8, tx, tz, lh, { sway: .03 }); }
+      for (let n = 0; n < 3; n++) if (R() < .8) { const f = fx((R() - .5) * w * .95, .3 + R() * 1.4), kk = pick([1, 2, 2, 1, 7]), jh = alto('jun', kk) * (.75 + R() * .6); carta('jun' + kk, f[0], -.1, f[1], tx, tz, jh, { sway: .012 }); }          // palmeras y coníferas al pie
+      for (let n = 0; n < 4; n++) if (R() < .9) { const f = fx((R() - .5) * w, .2 + R() * 1.2), kk = pick([3, 3, 4, 4]), jh = alto('jun', kk) * (.8 + R() * .8); carta('jun' + kk, f[0], -.1, f[1], tx, tz, jh, { sway: .01 }); }                    // plantas tropicales grandes
+      for (let n = 0; n < 2; n++) if (R() < .75) { const f = fx((R() - .5) * w * .9, -3 + R() * 3), kk = pick([1, 2]), jh = alto('jun', kk) * (.55 + R() * .35); carta('jun' + kk, f[0], h - .3, f[1], tx, tz, jh, { sway: .02 }); }                          // palmeras asomando en la azotea
+      if (R() < .6) { const f = fx((R() - .5) * w, .2), jh = 9 + R() * 8; carta('jun5', f[0], Math.max(0, h - jh - .4), f[1], tx, tz, jh, { sway: .03 }); }                                                                                              // liana gruesa colgando
+      if (R() < .8) { const f = fx((R() - .5) * w, .1), jh = 2.2 + R() * 1.6; carta('jun8', f[0], -.1, f[1], tx, tz, jh, { w: w * .9 }); }                                                                                                      // pradera con flores
+      if (R() < .75) { const k = pick(['01', '02', '03', '05', '06', '08']); const lh = Math.min(h - .5, alto('lianas', k) * (.9 + R() * .9)); carta('lianas' + k, px - p.nx * sd * .08 + tx * (R() - .5) * w * .8, Math.max(0, h - lh - .3), pz - p.nz * sd * .08 + tz * (R() - .5) * w * .8, tx, tz, lh, { sway: .03 }); }
       i += Math.max(5, w * .92);
     }
   }
   // objetos de calle en el agua (semáforos, postes, señales, bicis, coches, conos, vallas) y árboles: SPRITES, no polígonos
   for (let i = desde + 4; i < hasta; i += 5 + ((R() * 9) | 0)) {
     const sd = R() < .5 ? -1 : 1, t = muro(i, sd); if (t == null || t < 6) continue; const p = P[i], [tx, tz] = sdir(i);
+    if (opciones.excluir && Math.hypot(p.x - opciones.excluir.x, p.z - opciones.excluir.z) < opciones.excluir.r) continue;
     const off = Math.min(t - 1.4, (P[i].w || 20) / 2 - 1.6) ; const x = p.x + p.nx * sd * off, z = p.z + p.nz * sd * off;
-    const k = pick(['01', '02', '03', '04', '05', '09', '10', '11', '12', '03', '01']); carta('calle' + k, x, -.35, z, p.nx, p.nz, alto('calle', k));
-    if (R() < .22) { const a = pick(['01', '02', '03', '04', '05', '06', '07', '08']); const hh = alto('arboles', a); carta('arboles' + a, p.x + p.nx * sd * (t - 2.4), -.5, p.z + p.nz * sd * (t - 2.4), tx, tz, hh, { sway: .02 }); }
+    const k = pick(['01', '02', '03', '04', '05', '09', '10', '11', '12', '03', '01']);
+    // postes y señales: clavados en el fondo (su parte baja queda bajo el agua); bici, valla y cono hundidos; coche con su linea de flotacion
+    const base = { '01': -1.4, '02': -1.4, '03': -1.5, '04': -1.3, '05': -1.3, '09': -.65, '10': -.2, '11': -.8, '12': -1.0 }[k];
+    carta('calle' + k, x, base, z, p.nx, p.nz, alto('calle', k));
+    // arbol sobre la orilla emergida, junto a la fachada, no en mitad del agua
+    if (R() < .22) { const a = pick(['01', '02', '03', '04', '05', '06', '07', '08']); const hh = alto('arboles', a); carta('arboles' + a, p.x + p.nx * sd * (t - 1.0), -.1, p.z + p.nz * sd * (t - 1.0), tx, tz, hh, { sway: .02 }); }
   }
   // cables eléctricos japoneses convertidos en lianas: festones que cruzan la calle de fachada a fachada, a distintas alturas
-  for (let i = desde + 6; i < hasta; i += 17) for (let n = 0; n < 1; n++) { const p = P[i]; if (i > 120 && i < 215) continue; const ww = Math.min(60, (p.w || 26) * (1.0 + R() * .25)); carta('jun6', p.x, 13 + R() * 9, p.z, p.nx, p.nz, ww * 87 / 175 * 1.1, { w: ww }); }
+  for (let i = desde + 6; i < hasta; i += 17) { if (i > 120 && i < 215) continue; const p = P[i], tL = muro(i, -1), tR = muro(i, 1); if (opciones.excluir && Math.hypot(p.x - opciones.excluir.x, p.z - opciones.excluir.z) < opciones.excluir.r) continue; if (tL == null || tR == null) continue;
+    const hL = mapa.altura(p.x - p.nx * (tL + 1.2), p.z - p.nz * (tL + 1.2)), hR = mapa.altura(p.x + p.nx * (tR + 1.2), p.z + p.nz * (tR + 1.2)), top = Math.min(hL, hR) - 1.2; if (top < 9) continue;
+    const ww = tL + tR, ch = Math.min(ww * 87 / 175 * 1.1, top - 3), cxm = (tR - tL) / 2; carta('jun6', p.x + p.nx * cxm, top - ch, p.z + p.nz * cxm, p.nx, p.nz, ch, { w: ww }); }
+  if (opciones.audit) { const p0 = P[opciones.audit], BASES = { '01': -1.4, '02': -1.4, '03': -1.5, '04': -1.3, '05': -1.3, '09': -.65, '10': -.2, '11': -.8, '12': -1.0 };   // fila de prueba: un objeto de cada tipo delante de la camara
+    ['01', '02', '04', '05', '09', '10', '11', '12'].forEach((kk, j) => carta('calle' + kk, p0.x + p0.tx * (14 + j * 0) + p0.nx * (-9 + j * 2.4), BASES[kk], p0.z + p0.tz * 14 + p0.nz * (-9 + j * 2.4), p0.nx, p0.nz, alto('calle', kk))); }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setAttribute('sway', new THREE.Float32BufferAttribute(sw, 2)); geo.setIndex(idx);
   const mat = new THREE.MeshBasicMaterial({ map: atlas, vertexColors: true, alphaTest: .5, side: THREE.DoubleSide, fog: true }); let shd = null;
   mat.onBeforeCompile = (sh) => { sh.uniforms.uT = { value: 0 }; shd = sh;

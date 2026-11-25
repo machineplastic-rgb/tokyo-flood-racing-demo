@@ -8,7 +8,7 @@ export function torre109(THREE, c, R, H) {
   const cuerpo = new THREE.Mesh(new THREE.CylinderGeometry(R * .97, R, H + 4, 40, 1, false), new THREE.MeshLambertMaterial({ map: tex('art/azulejo_b.png', [Math.round(circ / 3), Math.round(H / 3)]), color: '#ffffff', emissive: '#6d675b' }));
   cuerpo.position.set(c.x, (H - 4) / 2, c.z); cuerpo.userData.ciudad = true; g.add(cuerpo);
   // bandas de ventanas oscuras (huecos) cada ~9 m; una cara más rota que otra
-  for (let y = 8; y < H - 6; y += 9) { const b = new THREE.Mesh(new THREE.CylinderGeometry(R * .975 + .03, R * 1.003 + .03, 2.2, 40, 1, true), new THREE.MeshLambertMaterial({ color: '#25343f' })); b.position.set(c.x, y, c.z); b.scale.set(1, 1, 1); b.userData.ciudad = true; g.add(b); }
+  // (anillos de ventanas eliminados: asomaban por los bordes de la tarjeta al mirar de lado)
   // remate: parapeto de hormigón y dos dientes rotos
   const par = new THREE.Mesh(new THREE.CylinderGeometry(R * .99, R * .99, 3.2, 40, 1, true), new THREE.MeshLambertMaterial({ color: '#b8b3a6', side: THREE.DoubleSide })); par.position.set(c.x, H + 1.6, c.z); par.userData.ciudad = true; g.add(par);
   for (const [a, w, h] of [[.5, 6, 3.6], [2.6, 8, 2.4], [4.2, 5, 4.4]]) { const d = new THREE.Mesh(new THREE.BoxGeometry(w, h, 2), new THREE.MeshLambertMaterial({ color: '#b8b3a6' })); d.position.set(c.x + Math.cos(a) * R, H + 3 + h / 2, c.z + Math.sin(a) * R); d.rotation.y = -a + Math.PI / 2; g.add(d); }
@@ -60,11 +60,11 @@ export function torre109v2(THREE, c, R, H) {
   { const cv = document.createElement('canvas'); cv.width = 16; cv.height = 64; const x = cv.getContext('2d'); x.fillStyle = '#bfe8f2'; x.fillRect(0, 0, 16, 64); for (let i = 0; i < 40; i++) { x.fillStyle = Math.random() < .5 ? '#ffffff' : '#7fc6dc'; x.fillRect((Math.random() * 16) | 0, (Math.random() * 64) | 0, 2, 6 + ((Math.random() * 10) | 0)); }
     const t = nt(new THREE.CanvasTexture(cv)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 3);
     const w = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 26), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: .9, side: THREE.DoubleSide })); w.position.set(c.x + R + .45, 12, c.z); w.rotation.y = Math.PI / 2; w.onBeforeRender = () => { t.offset.y = -(performance.now() / 1000) * .9; }; g.add(w); }
-  for (const y of [26, 38, 50]) { const r = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 7), new THREE.MeshLambertMaterial({ color: '#1f2a33' })); r.position.set(c.x + R + .1, y, c.z); g.add(r); const l = new THREE.Mesh(new THREE.BoxGeometry(2.4, .7, 9), new THREE.MeshLambertMaterial({ color: '#a8a395' })); l.position.set(c.x + R + .6, y - 1.2, c.z); l.userData.ciudad = true; g.add(l); }   // huecos y repisas del cilindro (de donde cae la cascada)
+  // (ranuras y repisas del cilindro eliminadas: flotaban al verlas de lado; las aberturas ya van pintadas en la tarjeta)
   // cartel colgante desgarrado y marquesina rosa del acceso
   { const b = new THREE.Mesh(new THREE.PlaneGeometry(6, 13), new THREE.MeshLambertMaterial({ map: crop(.45, .355, .55, .605), alphaTest: .4, side: THREE.DoubleSide, emissive: '#4a463d' })); b.position.set(c.x + R + .35, 40, c.z); b.rotation.y = Math.PI / 2; g.add(b); }
   { const m = new THREE.Mesh(new THREE.BoxGeometry(5, .8, 14), new THREE.MeshLambertMaterial({ color: '#c8567c', emissive: '#3a1626' })); m.position.set(c.x + R + 2, 7, c.z); m.userData.ciudad = true; g.add(m);
-    for (const dz of [-6.5, 6.5]) { const p = new THREE.Mesh(new THREE.BoxGeometry(.5, 7, .5), new THREE.MeshLambertMaterial({ color: '#b9953a' })); p.position.set(c.x + R + 3.8, 3.5, c.z + dz); g.add(p); } }
+    for (const dz of [-6.5, 6.5]) { const p = new THREE.Mesh(new THREE.BoxGeometry(.5, 10.4, .5), new THREE.MeshLambertMaterial({ color: '#b9953a' })); p.position.set(c.x + R + 3.8, 1.8, c.z + dz); g.add(p); } }
   // el "9" caído en la marquesina
   { const cv = document.createElement('canvas'); cv.width = 32; cv.height = 48; const x = cv.getContext('2d'); x.fillStyle = '#d93a32'; x.font = 'bold 44px monospace'; x.textAlign = 'center'; x.fillText('9', 16, 40);
     const t = nt(new THREE.CanvasTexture(cv)); const n = new THREE.Mesh(new THREE.PlaneGeometry(3, 4.5), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: .4, side: THREE.DoubleSide })); n.position.set(c.x + R + 3.2, 7.5, c.z + 3); n.rotation.set(-1.15, Math.PI / 2, .5); g.add(n); }
