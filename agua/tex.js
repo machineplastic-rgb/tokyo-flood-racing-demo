@@ -16,7 +16,7 @@ const ALTO = {
   maquinas: { '01': 1.9, '02': 1.9, '03': 1.9, '04': 1.9, '05': 1.9, '06': 1.9, '07': 1.9, '08': 1.1, '09': .45, '10': .45, '11': .5, '12': .5, '13': .4, '14': 1.8, '15': 1.2, '16': 2.4, '17': 1.1, '18': 1, '19': 7.5, '20': 4.5, '21': .7, '22': .7, '23': 2.4, '24': 2.4, '25': 2.4, '26': 3.2, '27': .5, '28': .5, '29': .7, '30': .7, '31': .7, '32': 1.1, '33': 1.5, '34': .9, '35': .1 },
 };
 const HORAS = {   // cielo (arriba, medio, horizonte), niebla, luz hemisferica, sol, tinte de las tarjetas
-  dia: { s: [-.60, .72, .30], cielo: ['#1f9bf0', '#3fb2f6', '#7fd0fa'], niebla: '#b4e0f8', hemi: ['#ffffff', '#b9c9a8', 1.4], sol: ['#fff0cf', 3.5], tinte: '#ffffff' },
+  dia: { s: [-.36, .89, .28], cielo: ['#1f9bf0', '#3fb2f6', '#7fd0fa'], niebla: '#b4e0f8', hemi: ['#ffffff', '#b9c9a8', 1.4], sol: ['#fff0cf', 3.5], tinte: '#ffffff' },
   manana: { s: [.80, .42, .30], cielo: ['#5a9be0', '#a9d3ee', '#fbe7c2'], niebla: '#f0e6d2', hemi: ['#fff4e0', '#b9c9a8', 2.0], sol: ['#ffe2a8', 2.2], tinte: '#fff1dc' },
   tarde: { s: [-.85, .33, .35], cielo: ['#4a78c2', '#f0b07a', '#ffd9a0'], niebla: '#f5cfa0', hemi: ['#ffe2c4', '#a89478', 1.8], sol: ['#ffb871', 2.4], tinte: '#ffe0bc' },
   noche: { s: [.20, .55, .10], cielo: ['#0a1030', '#1f3466', '#3b5a8f'], niebla: '#27406b', hemi: ['#6f86c8', '#1d2a44', 1.1], sol: ['#8fa6ff', .5], tinte: '#7d93d0' },
@@ -215,7 +215,10 @@ export async function mundoTex(ctx) {
   // ---------- ambiente (cielo, niebla, luces)
   const H = HORAS[HORA] || HORAS.dia, cc = document.createElement('canvas'); cc.width = 4; cc.height = 256; const cg = cc.getContext('2d'); const gr = cg.createLinearGradient(0, 0, 0, 256);
   gr.addColorStop(0, H.cielo[0]); gr.addColorStop(.55, H.cielo[1]); gr.addColorStop(1, H.cielo[2]); cg.fillStyle = gr; cg.fillRect(0, 0, 4, 256);
-  const ct = new THREE.CanvasTexture(cc); ct.colorSpace = THREE.SRGBColorSpace; sol.position.set(H.s[0] * 150, H.s[1] * 150, H.s[2] * 150); if (ctx.MAT.agua && ctx.MAT.agua.uniforms) ctx.MAT.agua.uniforms.uSolX.value = H.s[0];
+  const ct = new THREE.CanvasTexture(cc); ct.colorSpace = THREE.SRGBColorSpace; sol.position.set(H.s[0] * 150, H.s[1] * 150, H.s[2] * 150); if (ctx.MAT.agua && ctx.MAT.agua.uniforms) { const U = ctx.MAT.agua.uniforms; U.uSolX.value = H.s[0]; U.uSol.value.set(H.s[0], H.s[1], H.s[2]).normalize();
+    const ht = new Uint8Array(LEN * 2);        // perfil de alturas de las azoteas de la primera línea (fila 0 = lado -X, fila 1 = lado +X), 1 valor por metro
+    for (const e of tarjL1) { const fila = e.s < 0 ? 0 : 1, top = Math.max(0, Math.min(63.9, ALT + e.h * .97)); for (let z = Math.floor(e.x); z < Math.ceil(e.x + e.w); z++) { const zz = ((z % LEN) + LEN) % LEN; ht[fila * LEN + zz] = Math.max(ht[fila * LEN + zz], Math.round(top / 64 * 255)); } }
+    const tx = new THREE.DataTexture(ht, LEN, 2, THREE.RedFormat, THREE.UnsignedByteType); tx.magFilter = tx.minFilter = THREE.NearestFilter; tx.wrapS = THREE.RepeatWrapping; tx.needsUpdate = true; U.uHt.value = tx; }
   scene.background = null; cielo = crearCielo(THREE, H, sol.position); scene.add(cielo.mesh); scene.fog.color.set(H.niebla);
   if (ctx.MAT.agua) { if (ctx.MAT.agua.uniforms) ctx.MAT.agua.uniforms.uTinte.value.set(H.tinte); else ctx.MAT.agua.color.set(H.tinte); }
   const hemi = scene.children.find(o => o.isHemisphereLight); if (hemi) { hemi.color.set(H.hemi[0]); hemi.groundColor.set(H.hemi[1]); hemi.intensity = H.hemi[2]; } sol.color.set(H.sol[0]); sol.intensity = H.sol[1];

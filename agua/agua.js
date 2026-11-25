@@ -3,7 +3,7 @@
 export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
   const hN = huecosN.map(([a, b]) => new THREE.Vector2(a, b)), hS = huecosS.map(([a, b]) => new THREE.Vector2(a, b));
   const u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-    uT: { value: 0 }, uSolX: { value: -.45 }, uTinte: { value: new THREE.Color('#ffffff') },
+    uT: { value: 0 }, uSolX: { value: -.45 }, uSol: { value: new THREE.Vector3(-.48, .82, .30) }, uHt: { value: null }, uTinte: { value: new THREE.Color('#ffffff') },
     uMoto: { value: new THREE.Vector4(0, 0, 0, 1) }, uVel: { value: 0 },
     uHN: { value: hN }, uHS: { value: hS },
     cHondo: { value: new THREE.Color('#14b0e2') }, cMedio: { value: new THREE.Color('#2cc6ee') }, cClaro: { value: new THREE.Color('#86e8f8') }, cBlanco: { value: new THREE.Color('#eafdff') },
@@ -17,7 +17,7 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
       }`,
     fragmentShader: `#include <fog_pars_fragment>
       varying vec3 vL, vW;
-      uniform float uT, uVel, uSolX; uniform vec3 uTinte, cHondo, cMedio, cClaro, cBlanco; uniform vec4 uMoto; uniform vec2 uHN[${hN.length}], uHS[${hS.length}];
+      uniform sampler2D uHt; uniform vec3 uSol; uniform float uT, uVel, uSolX; uniform vec3 uTinte, cHondo, cMedio, cClaro, cBlanco; uniform vec4 uMoto; uniform vec2 uHN[${hN.length}], uHS[${hS.length}];
       const float LEN = ${LEN.toFixed(1)}, A = ${W0.toFixed(1)}, B = ${W1.toFixed(1)};
       float hw(float z){ z = mod(z, LEN); if (z < 142.) return A; if (z < 156.) return A + (B-A)*smoothstep(0.,1.,(z-142.)/14.); if (z < 180.) return B; if (z < 194.) return B - (B-A)*smoothstep(0.,1.,(z-180.)/14.); return A; }
       float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
@@ -39,18 +39,19 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
         float tl = floor(uT*2.)/2. * .35;
         float z0 = vL.z, x0 = vL.x;
         // sombra de los edificios del lado del sol: banda de borde escalonado que se adentra en el canal
-        float xq = floor(x0/.25)*.25; float ds = uSolX < 0. ? xq + hw(z0) : hw(z0) - xq;       // distancia al muro que tapa el sol (depende de la hora)
-        float sw = (1.2 + 9.*abs(uSolX)) * (.85 + .18*sin(floor(z0/.5)*.5*.13) + .12*step(.55, h21(vec2(floor(z0/3.), 7.))));
-        bool sombra = ds < sw && ds > -.5;
+        // sombra REAL: un rayo desde el agua hacia el sol; si al llegar al plano de la fachada su altura queda por debajo de la azotea, está a la sombra
+        bool sombra = false;
+        { float dxw = uSol.x < 0. ? q.x + hw(q.y) : hw(q.y) - q.x; float tau = max(dxw, 0.) / max(.05, abs(uSol.x)); float zs = q.y + tau*uSol.z;
+          float Hh = texture2D(uHt, vec2(fract(zs / LEN), uSol.x < 0. ? .25 : .75)).r * 64.; sombra = Hh > tau*uSol.y; }
         float bl = sin(q.x*.90 + tl*.5 + sin(q.y*1.2 - tl*.4)*1.7) * sin(q.y*.70 + tl*.35 + sin(q.x*1.1 + tl*.3)*1.5);
-        vec2 dr = vec2(.05, .13) * floor(uT*5.)/5.;                        // deriva lenta a lo largo del canal
-        float e1 = vor(q*.85 + dr, t*1.6), e2 = vor(q*1.7 + dr*1.7 + 11., t*2.1 + 2.);
+        vec2 dr = vec2(.05, .13) * .3 * floor(uT*5.)/5.;                        // deriva lenta a lo largo del canal
+        float e1 = vor(q*.85 + dr, t*.5), e2 = vor(q*1.7 + dr*1.7 + 11., t*.7 + 2.);
         float cs = 1. - smoothstep(0., .26, e1), cs2 = 1. - smoothstep(0., .17, e2);
         float dist = length(cameraPosition - vW); float fd = 1. - smoothstep(35., 85., dist); cs *= fd; cs2 *= fd;      // lejos se apaga la línea fina (evita el centelleo)
         vec3 col = cHondo; float a = .66;
         if (bl > -.15) { col = cMedio; a = .60; }
         if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .55; }
-        if (sombra) { col = mix(col, vec3(.02, .21, .19)*(.75 + .35*bl), .80); a += .30; cs *= .35; cs2 *= .3; } else { col *= 1.10; }
+        if (sombra) { col = mix(col, vec3(.004, .115, .075)*(.8 + .3*bl), .95); a = max(a + .30, .95); cs *= .35; cs2 *= .3; } else { col *= 1.10; }
         if (cs2 > .55 && !sombra) { col = mix(col, cClaro, .45); }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
         if (cs > .40) { col = sombra ? cMedio : cClaro; a = sombra ? .55 : .50; }
         if (cs > .86) { col = cBlanco; a = .72; }
