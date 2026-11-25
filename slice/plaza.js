@@ -39,6 +39,9 @@ float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mi
         else if (fam < .93) ft = sa(12, vec2(u/14., y/13.));
         else ft = sa(10, vec2(u/14., y/13.));
         col = mix(col, ft.rgb * 1.08, wall * ft.a * step(.5, y + 3.4));
+        { float cr = dot(ft.rgb, vec3(.33)); float isGlass = step(cr, .42) * step(.5, ft.a); float dg = fract((u + y*.6)*.045 + .15*hs(floor(vec2(vWP.x/17., vWP.z/17.))));
+          vec3 ref = mix(vec3(.60,.74,.98), vec3(.95,.62,.80), smoothstep(.25,.75,dg)); ref = mix(ref, vec3(.60,.48,.90), smoothstep(.7,1.,dg));
+          ft.rgb = mix(ft.rgb, ref*(.55+.7*cr), isGlass*.55*wall); }
         float h = 0.; vec2 f = vec2(0.);
         // sombra propia (cara que no mira al sol)
         float sunl = clamp(dot(n, normalize(uSun)), 0., 1.); col *= mix(.62, 1.14, sunl);
@@ -50,7 +53,7 @@ float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mi
         float hoja = hs(q*vec2(1.7, 1.9) + 4.);
         vec3 vv = hoja < .30 ? vec3(.10,.42,.13) : hoja < .62 ? vec3(.20,.62,.16) : hoja < .88 ? vec3(.44,.80,.22) : vec3(.72,.92,.35);
         float hueco = step(.90, hs(q*2.3 + 11.));
-        col = mix(col, vv, wall * cub * (1. - hueco*.7) * .97);
+        col = mix(col, vv, wall * cub * .20 * step(.5, hs(q*1.3 + 6.)));   // solo un velo de verde con motas; el cuerpo lo hacen las tarjetas   // el verde pintado queda de fondo; el volumen lo ponen las tarjetas de follaje
         // cortinas colgando desde la azotea no se pueden saber aquí; se pone verde extra en la base (musgo húmedo)
         col = mix(col, vec3(.14,.32,.17), wall * smoothstep(1.4, .0, y) * .75);
         col *= 1. - .30*wall*smoothstep(3., .0, y);                             // oclusión al pie

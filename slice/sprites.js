@@ -5,6 +5,7 @@ const BASE1 = './spr/px1/', BASE2 = './spr/uni/';
 const IDS = { edificios: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11a', '11b', '12', '13', '14', '15', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N8'],
   plantas: Array.from({ length: 25 }, (_, i) => String(i + 1).padStart(2, '0')), maquinas: Array.from({ length: 35 }, (_, i) => String(i + 1).padStart(2, '0')) };
 const ALTO = {
+  fol: { 1: 11, 2: 6, 3: 13, 4: 9, 5: 3.2, 6: 6.5, 7: 12, 8: 2.2 },
   edificios: { '01': 16, '02': 13, '03': 15, '04': 30, '05': 42, '06': 18, '07': 9, '08': 9, '09': 20, '10': 15, '11a': 14, '11b': 7, '12': 7, '13': 20, '14': 9, '15': 5, N1: 20, N2: 26, N3: 20, N4: 18, N5: 19, N6: 15, N7: 20, N8: 10 },
   plantas: { '01': 9, '02': 4.5, '03': 6, '04': 8, '05': 4, '06': 2.6, '07': 2.4, '08': 2.2, '09': 1.8, '10': 2.6, '11': 2.6, '12': 1.4, '13': 1.1, '14': 1.2, '15': .9, '16': 1, '17': .6, '18': 4, '19': 4, '20': 4, '21': 1.2, '22': 1.1, '23': .9, '24': 1, '25': .4 },
   maquinas: { '01': 1.9, '02': 1.9, '03': 1.9, '04': 1.9, '05': 1.9, '06': 1.9, '07': 1.9, '08': 1.1, '09': .45, '10': .45, '11': .5, '12': .5, '13': .4, '14': 1.8, '15': 1.2, '16': 2.4, '17': 1.1, '18': 1, '19': 7.5, '20': 4.5, '21': .7, '22': .7, '23': 2.4, '24': 2.4, '25': 2.4, '26': 3.2, '27': .5, '28': .5, '29': .7, '30': .7, '31': .7, '32': 1.1, '33': 1.5, '34': .9, '35': .1 },
@@ -67,6 +68,7 @@ const cargaImg = (u) => new Promise(ok => { const i = new Image(); i.onload = ()
 export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
   const { desde = 30, hasta = 420 } = opciones;
   const imgs = [];
+  for (let i = 1; i <= 8; i++) imgs.push({ k: 'fol' + i, src: './art/fol_' + i + '.png' });
   for (const tipo of Object.keys(IDS)) for (const id of IDS[tipo]) imgs.push({ k: tipo + id, src: BASE1 + tipo + '/' + tipo + '_' + id + '.png' });
   for (const [g, n] of [['calle', 12], ['rotulos', 12], ['lianas', 12], ['arboles', 8]]) for (let i = 1; i <= n; i++) { const s = String(i).padStart(2, '0'); imgs.push({ k: g + s, src: BASE2 + g + '/' + g + '_' + s + '.png' }); }
   await Promise.all(imgs.map(async o => { o.img = await cargaImg(o.src); }));
@@ -114,9 +116,15 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
       // pantallas gigantes en lo alto (35 %) y pantallas medias; casi siempre con una cortina de lianas encima
       if (R() < .55) { const sk = 'scr' + ((R() * 5) | 0), sw = 11 + R() * 10, sy = Math.max(6, h * (.45 + R() * .4)); carta(sk, px - p.nx * sd * .2 + tx * (R() - .5) * w * .4, sy, pz - p.nz * sd * .2 + tz * (R() - .5) * w * .4, tx, tz, sw * .42, { w: sw });
         if (R() < .7) carta('lianas' + pick(['01', '02', '03', '05', '06']), px - p.nx * sd * .26 + tx * (R() - .5) * w * .4, sy - 5, pz - p.nz * sd * .26 + tz * (R() - .5) * w * .4, tx, tz, 12 + R() * 6, { sway: .03 }); }
-      // árboles que brotan de las ventanas y bosque en la azotea
-      for (let n = 0; n < 3; n++) if (R() < .6) { const a8 = pick(['01', '02', '03', '04', '05', '06', '07', '08']), th = 6 + R() * 6; carta('arboles' + a8, px - p.nx * sd * (.5 + R() * 1.2) + tx * (R() - .5) * w * .8, 6 + R() * Math.max(2, h * .6), pz - p.nz * sd * (.5 + R() * 1.2) + tz * (R() - .5) * w * .8, tx, tz, th, { sway: .02 }); }
-      for (let n = 0; n < 2; n++) { const a8 = pick(['01', '02', '03', '04', '05', '06', '07', '08']); carta('arboles' + a8, px - p.nx * sd * (1 + R() * 3) + tx * (R() - .5) * w * .7, h * .93 - 1.5, pz - p.nz * sd * (1 + R() * 3) + tz * (R() - .5) * w * .7, tx, tz, 9 + R() * 6, { sway: .02 }); }
+      // FOLLAJE EN VOLUMEN: masas que sobresalen de la cornisa y la azotea, árboles sobre repisas, ramas que brotan de ventanas, cortinas colgantes y hierba al pie
+      const fx = (dx, dz) => [px - p.nx * sd * dz + tx * dx, pz - p.nz * sd * dz + tz * dx];
+      for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w * .9, .4 + R() * 2.4), kk = pick([1, 1, 1, 2, 2]), fh = alto('fol', kk) * (.8 + R() * .7); carta('fol' + kk, f[0], h * .94 - fh * .10, f[1], tx, tz, fh * 1.25, { sway: .015 }); }          // corona de azotea: sobresale por encima
+      for (let n = 0; n < 3; n++) if (R() < .75) { const f = fx((R() - .5) * w * .9, .3 + R()), fh = alto('fol', 2) * (.9 + R() * .6); carta('fol2', f[0], 5 + R() * Math.max(2, h * .8), f[1], tx, tz, fh, { sway: .015 }); }   // voladizo en cornisas intermedias
+      for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .85, .3), fh = alto('fol', 3) * (.7 + R() * .5); carta('fol3', f[0], 4 + R() * Math.max(2, h * .6), f[1], tx, tz, fh, { sway: .01 }); }       // árbol sobre repisa
+      for (let n = 0; n < 3; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .25), fh = alto('fol', 6); carta('fol6', f[0], 3 + R() * Math.max(2, h * .7), f[1], tx, tz, fh, { sway: .02 }); }                           // ramas de ventana
+      for (let n = 0; n < 2; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 4) * (.9 + R() * .8); carta('fol4', f[0], h * .93 - fh * .8, f[1], tx, tz, fh, { sway: .03 }); }                      // cortina colgante
+      for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 7) * (.7 + R() * .8); carta('fol7', f[0], -.3, f[1], tx, tz, fh, { sway: .01 }); }                                   // columna de hiedra
+      for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w, .1 + R() * .8), kk = pick([5, 5, 8]); carta('fol' + kk, f[0], -.4, f[1], tx, tz, alto('fol', kk) * (.8 + R() * .5), { sway: .012 }); }      // arbustos y hierba al pie
       if (R() < .75) { const k = pick(['01', '02', '03', '05', '06', '08']); const lh = alto('lianas', k) * (.9 + R() * .9); carta('lianas' + k, px - p.nx * sd * .08 + tx * (R() - .5) * w * .8, h * .94 - lh + 1, pz - p.nz * sd * .08 + tz * (R() - .5) * w * .8, tx, tz, lh, { sway: .03 }); }
       i += Math.max(5, w * .92);
     }
