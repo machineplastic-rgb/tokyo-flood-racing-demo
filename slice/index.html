@@ -24,6 +24,13 @@
   #girar{display:none;position:fixed;inset:0;background:#22262bee;color:#f3ebdd;place-items:center;font:600 18px system-ui;text-align:center;padding:24px}
   @media (orientation:portrait) and (pointer:coarse){#girar{display:grid}}
   @media (pointer:fine){.btn{display:none}}
+  .stick{position:fixed;bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:#ffffff22;border:2px solid #ffffff66;touch-action:none;display:none;z-index:5}
+  .stick i{position:absolute;left:43px;top:43px;width:64px;height:64px;border-radius:50%;background:#ffffff88;border:2px solid #ffffffcc}
+  #stL{left:max(22px,env(safe-area-inset-left))} #stR{right:max(22px,env(safe-area-inset-right))}
+  .stick b{position:absolute;left:0;right:0;text-align:center;font:600 10px system-ui;color:#fff;opacity:.7}
+  .stick b.u{top:6px}.stick b.d{bottom:6px}
+  @media (max-aspect-ratio:1/1){#perf{top:auto;bottom:196px;left:8px;font-size:9px}#carrera{top:50px;font-size:13px}#zona{top:88px}#vel{bottom:200px}}
+  body.sticks .stick{display:block} body.sticks .btn,body.sticks #bAuto{display:none}
 </style>
 <script type="importmap">
 { "imports": {
@@ -39,6 +46,7 @@
 <div id="carrera" class="hud"></div>
 <div id="zona" class="hud"></div>
 <div id="vel" class="hud"></div>
+<div id="stL" class="stick"><i></i></div><div id="stR" class="stick"><b class="u">GAS</b><b class="d">FRENO · ATRÁS</b><i></i></div>
 <div id="izq" class="btn">◀</div><div id="der" class="btn">▶</div>
 <div id="freno" class="btn">FRENO<br>DERRAPE</div><div id="gas" class="btn">GAS</div>
 <button id="bCam" class="mini">Cámara</button><button id="bAuto" class="mini">Auto-gas</button><button id="bReset" class="mini">Reset</button>
@@ -177,7 +185,13 @@ progreso('Horneando sombras…');
 // ---------------- pista (centro, ancho, normales) para colisiones y vueltas
 const P = pista.puntos.map(([x, z, w]) => ({ x, z, w })), N = P.length;
 P.forEach((a, i) => { const b = P[(i + 1) % N], c = P[(i - 1 + N) % N]; let tx = b.x - c.x, tz = b.z - c.z; const l = Math.hypot(tx, tz) || 1; a.tx = tx / l; a.tz = tz / l; a.nx = -a.tz; a.nz = a.tx; });
-const OB = pista.obstaculos.map(([x, z, r]) => ({ x, z, r }));
+const Q2chk = () => new URLSearchParams(location.search).has('chk');
+const OB = [];   // los obstaculos de la pista (postes, arboles) eran de la ciudad gris y ya no se dibujan: quitados para no dejar paredes invisibles
+const enMapa = (x, z) => x > -418 && x < 98 && z > -228 && z < 18;
+const muroEn = (x, z) => enMapa(x, z) && window.__MAPA.altura(x, z) > 1.5;
+const bloqueado = (x, z, r) => { if (!enMapa(x, z)) return false;
+  { const q = P[cercano(x, z, estado.idx)], dd = Math.abs((x - q.x) * q.nx + (z - q.z) * q.nz); if (dd < q.w * .3) return false; }   // el centro de la pista siempre es paso libre (pasos elevados y puentes cuentan como altura en el mapa)
+ for (let a = 0; a < 8; a++) if (muroEn(x + Math.cos(a * .785) * r, z + Math.sin(a * .785) * r)) return true; return muroEn(x, z); };
 vestir(THREE, scene, P);
 progreso('Colocando sprites…'); { const t0 = performance.now(); const sp = await crearSprites(THREE, scene, P, window.__MAPA, { excluir: { x: TCN.x, z: TCN.z, r: 55 }, desde: 30, hasta: 430, audit: +(new URLSearchParams(location.search).get('audit') || 0) }); if (new URLSearchParams(location.search).has('nospr')) sp.mesh.visible = false; window.__SPR = sp.cartas + ' cartas · ' + Math.round(sp.tris) + ' tri · ' + Math.round(performance.now() - t0) + ' ms'; }
 // ---------------- elementos de juego sobre el trazado: plataformas de TURBO y RAMPAS de salto (en los tramos mas rectos)
@@ -235,7 +249,7 @@ const VUELTAS = ((pista.modos.rojo || pista.modos.circuito || {}).vueltas) || 3,
 try { estado.mejor = +localStorage.getItem('tfr_mejor_vuelta') || null; } catch (e) {}
 
 // ---------------- controles (teclado + tactil)
-const ent = { gas: 0, freno: 0, izq: 0, der: 0 }; let autoGas = MOVIL, camAerea = new URLSearchParams(location.search).has('aer'), empezado = false;   // el auto-gas espera al primer toque
+const ent = { gas: 0, freno: 0, izq: 0, der: 0, abajo: 0 }; let autoGas = MOVIL, camAerea = new URLSearchParams(location.search).has('aer'), empezado = false;   // el auto-gas espera al primer toque
 const teclas = { ArrowUp: 'gas', KeyW: 'gas', ArrowDown: 'freno', KeyS: 'freno', Space: 'freno', ArrowLeft: 'izq', KeyA: 'izq', ArrowRight: 'der', KeyD: 'der' };
 addEventListener('keydown', e => { if (teclas[e.code]) { ent[teclas[e.code]] = 1; e.preventDefault(); } if (e.code === 'KeyR') reset(); if (e.code === 'KeyC') toggleCam(); });
 addEventListener('keyup', e => { if (teclas[e.code]) ent[teclas[e.code]] = 0; });
@@ -244,6 +258,19 @@ for (const id of ['izq', 'der', 'gas', 'freno']) {
   b.addEventListener('pointerdown', e => { empezado = true; ent[id] = 1; b.classList.add('on'); b.setPointerCapture(e.pointerId); e.preventDefault(); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { ent[id] = 0; b.classList.remove('on'); });
 }
+{ const Q2 = new URLSearchParams(location.search), usar = Q2.has('stick') || MOVIL;
+  if (usar) { document.body.classList.add('sticks'); autoGas = false; }
+  const mk = (id, onMove, onEnd) => { const el = document.getElementById(id), kn = el.querySelector('i'); let pid = null; const R0 = 43;
+    const mover = e => { const r = el.getBoundingClientRect(); let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); const l = Math.hypot(dx, dy), m = 75; if (l > m) { dx *= m / l; dy *= m / l; }
+      kn.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; onMove(dx / m, dy / m); };
+    el.addEventListener('pointerdown', e => { pid = e.pointerId; el.setPointerCapture(pid); empezado = true; mover(e); e.preventDefault(); });
+    el.addEventListener('pointermove', e => { if (e.pointerId === pid) mover(e); });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, () => { pid = null; kn.style.transform = ''; onEnd(); }); };
+  let tAbajo = 0;
+  mk('stL', (x) => { ent.izq = Math.max(0, -x - .12) / .88; ent.der = Math.max(0, x - .12) / .88; }, () => { ent.izq = ent.der = 0; });
+  mk('stR', (x, y) => { ent.gas = Math.max(0, -y - .15) / .85; ent.freno = y > .25 ? 1 : 0; ent.abajo = y > .25 ? 1 : 0; }, () => { ent.gas = 0; ent.freno = 0; ent.abajo = 0; });
+  window.__tAbajo = () => tAbajo; window.__setAbajo = v => tAbajo = v; }
+if (Q2chk()) { const bad = []; for (let i = 100; i < 460; i += 2) for (const o of [-.28, .28]) if (bloqueado(P[i].x + P[i].nx * o * P[i].w, P[i].z + P[i].nz * o * P[i].w, M.radio)) bad.push(i + (o < 0 ? 'L' : 'R')); const d = document.createElement('div'); d.style.cssText = 'position:fixed;top:120px;left:8px;background:#000c;color:#0f0;font:12px monospace;z-index:99;padding:4px'; d.textContent = 'centro bloqueado en: ' + (bad.join(',') || 'ninguno'); document.body.appendChild(d); }
 const bAuto = document.getElementById('bAuto'); bAuto.classList.toggle('on', autoGas); bAuto.style.background = autoGas ? '#1c7c8ccc' : '';
 bAuto.onclick = () => { autoGas = !autoGas; bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; };
 function toggleCam() { camAerea = !camAerea; }
@@ -259,21 +286,25 @@ function fisica(dt) {
   const gas = autoGas && empezado ? Math.max(ent.gas, 1 - ent.freno) : ent.gas, giro = ent.der - ent.izq;
   estado.derrape = ent.freno && Math.abs(giro) > 0 && fs > 10;
   const aire = estado.y > .08, vmax = estado.turbo > 0 ? M.turbo : M.velMax;
-  let a = gas * M.acel + (estado.turbo > 0 ? 16 : 0); if (ent.freno && !estado.derrape && !aire) a -= M.freno * Math.sign(fs || 1);
+  window.__setAbajo(ent.abajo && fs < 1.5 ? window.__tAbajo() + dt : 0); const atras = window.__tAbajo() > .45;
+  let a = gas * M.acel + (estado.turbo > 0 ? 16 : 0); if (atras) a = -M.acel * .55; else if (ent.freno && !estado.derrape && !aire) a -= M.freno * Math.sign(fs || 1);
   estado.vx += fx * a * dt; estado.vz += fz * a * dt;
   fs = estado.vx * fx + estado.vz * fz;
   const lx = estado.vx - fx * fs, lz = estado.vz - fz * fs;                // deslizamiento lateral: el agarre lo amortigua
   const ag = Math.exp(-(estado.derrape ? M.agarreDerrape : M.agarre) * dt);
   const roz = Math.exp(-(gas ? .08 : .35) * dt);
-  let nfs = Math.max(-5, fs * roz); if (nfs > vmax) nfs = Math.max(vmax, nfs - 30 * dt);
+  let nfs = Math.max(atras ? -9 : -5, fs * roz); if (nfs > vmax) nfs = Math.max(vmax, nfs - 30 * dt);
   estado.vx = fx * nfs + lx * ag; estado.vz = fz * nfs + lz * ag;
   const efi = Math.min(1, Math.abs(nfs) / 6) * Math.sign(nfs) * (1 - .3 * Math.abs(nfs) / M.velMax);
   estado.yaw -= giro * M.giro * dt * efi * (estado.derrape ? M.giroDerrape : 1) * (aire ? .35 : 1);
+  const px0 = estado.x, pz0 = estado.z;
   estado.x += estado.vx * dt; estado.z += estado.vz * dt;
+  if (bloqueado(estado.x, estado.z, M.radio)) { const nx = estado.x, nz = estado.z;
+    if (!bloqueado(nx, pz0, M.radio)) { estado.z = pz0; estado.vz *= -.25; estado.vx *= .97; } else if (!bloqueado(px0, nz, M.radio)) { estado.x = px0; estado.vx *= -.25; estado.vz *= .97; } else { estado.x = px0; estado.z = pz0; estado.vx *= -.2; estado.vz *= -.2; } estado.sacudida = Math.max(estado.sacudida, .25); }
   // paredes del canal: la moto no sale del agua navegable
   estado.idx = cercano(estado.x, estado.z, estado.idx); const s = P[estado.idx];
   const d = (estado.x - s.x) * s.nx + (estado.z - s.z) * s.nz, lim = s.w / 2 - M.radio;
-  if (Math.abs(d) > lim) {
+  if (!enMapa(estado.x, estado.z) && Math.abs(d) > lim) {
     const sg = Math.sign(d); estado.x -= s.nx * (Math.abs(d) - lim) * sg; estado.z -= s.nz * (Math.abs(d) - lim) * sg;
     const vn = estado.vx * s.nx + estado.vz * s.nz; if (vn * sg > 0) { estado.vx -= s.nx * vn * 1.3; estado.vz -= s.nz * vn * 1.3; }
     estado.vx *= .985; estado.vz *= .985;
@@ -330,10 +361,11 @@ function frame() {
   else {
     const dist = 8 + v * .06; let cx = estado.x - fx * dist, cz = estado.z - fz * dist;
     const ci = cercano(cx, cz, estado.idx), s = P[ci], d = (cx - s.x) * s.nx + (cz - s.z) * s.nz, lim = s.w / 2 - .4;   // la camara no entra en los edificios
-    if (Math.abs(d) > lim) { cx -= s.nx * (Math.abs(d) - lim) * Math.sign(d); cz -= s.nz * (Math.abs(d) - lim) * Math.sign(d); }
+    if (!enMapa(cx, cz) && Math.abs(d) > lim) { cx -= s.nx * (Math.abs(d) - lim) * Math.sign(d); cz -= s.nz * (Math.abs(d) - lim) * Math.sign(d); }
+    if (enMapa(cx, cz) && muroEn(cx, cz)) { cx = estado.x - fx * 2.5; cz = estado.z - fz * 2.5; }
     camPos.lerp(new THREE.Vector3(cx, 1.9 + (estado.y + estado.yr) * .6, cz), 1 - Math.exp(-dt * 7)); camera.position.copy(camPos);
     if (estado.sacudida > 0) camera.position.add(new THREE.Vector3((Math.random() - .5) * .25, (Math.random() - .5) * .25, (Math.random() - .5) * .25).multiplyScalar(estado.sacudida * 2));
-    camera.fov += ((54 + v * .3 + (estado.turbo > 0 ? 14 : 0)) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
+    camera.fov += (((innerWidth < innerHeight ? 80 : 54) + v * .3 + (estado.turbo > 0 ? 14 : 0)) - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix();
     camera.lookAt(estado.x + fx * 12, 6.4, estado.z + fz * 12);
   }
   { const hq = new URLSearchParams(location.search).get('hero'); if (hq) { const [dx, h, dz, fov, ly] = hq.split(',').map(Number); camera.position.set(TCN.x + dx, h, TCN.z + dz); camera.fov = fov; camera.updateProjectionMatrix(); camera.lookAt(TCN.x, ly, TCN.z); } }
