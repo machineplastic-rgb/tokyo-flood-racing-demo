@@ -26,6 +26,17 @@ const CARTELES = [  // [pieza, orientación, alto en metros, colorTexto, textos]
   ['09', 'h', 6, '#fff2d8', ['渋谷', '地下鉄 出口', 'カラオケ']],
   ['10', 'l', 4.2, '#fff2d8', ['酒', '宴', '祭']],
 ];
+// Pantallas gigantes (sin contenido real: degradados, franjas y formas abstractas en colores de neón)
+function pantallas() {
+  const out = [], pal = [['#18d6e8', '#ff3fa8', '#ffe14a'], ['#ff7a2a', '#7a3cff', '#18e6a0'], ['#2a6cff', '#ff4a4a', '#f4f4ff'], ['#ff3fa8', '#18d6e8', '#1a1a3a'], ['#ffe14a', '#2a6cff', '#ff7a2a']];
+  pal.forEach((c, i) => { const cv = document.createElement('canvas'); cv.width = 96; cv.height = 40; const g = cv.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 96, 40); gr.addColorStop(0, c[0]); gr.addColorStop(.55, c[1]); gr.addColorStop(1, c[2]); g.fillStyle = gr; g.fillRect(0, 0, 96, 40);
+    g.fillStyle = 'rgba(255,255,255,.35)'; for (let k = 0; k < 6; k++) g.fillRect(k * 18 - 4, 0, 4, 40); g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.arc(30 + i * 9, 22, 12 + i * 2, 0, 6.3); g.fill();
+    g.fillStyle = '#fff'; g.fillRect(52, 12, 30, 6); g.fillRect(52, 24, 22, 4);
+    g.fillStyle = '#20242c'; g.fillRect(0, 0, 96, 2); g.fillRect(0, 38, 96, 2); g.fillRect(0, 0, 2, 40); g.fillRect(94, 0, 2, 40);   // marco
+    const d = g.getImageData(0, 0, 96, 40); for (let y = 0; y < 40; y += 2) for (let x = 0; x < 96; x++) { const j = (y * 96 + x) * 4; d.data[j] *= .86; d.data[j + 1] *= .86; d.data[j + 2] *= .86; } g.putImageData(d, 0, 0);   // retícula de píxeles
+    out.push({ k: 'scr' + i, img: cv }); }); return out;
+}
 async function generaCarteles() {
   const out = []; const hs = {};
   for (const [id, ori, alto, col, textos] of CARTELES) {
@@ -59,6 +70,7 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
   for (const tipo of Object.keys(IDS)) for (const id of IDS[tipo]) imgs.push({ k: tipo + id, src: BASE1 + tipo + '/' + tipo + '_' + id + '.png' });
   for (const [g, n] of [['calle', 12], ['rotulos', 12], ['lianas', 12], ['arboles', 8]]) for (let i = 1; i <= n; i++) { const s = String(i).padStart(2, '0'); imgs.push({ k: g + s, src: BASE2 + g + '/' + g + '_' + s + '.png' }); }
   await Promise.all(imgs.map(async o => { o.img = await cargaImg(o.src); }));
+  const PANT = pantallas(); for (const o of PANT) imgs.push(o);
   const SG = await generaCarteles(); for (const o of SG.out) imgs.push(o); const SGK = SG.out.map(o => o.k);
   const ok = imgs.filter(o => o.img); ok.sort((a, b) => b.img.height - a.img.height);
   const AW = 2048, cv = document.createElement('canvas'); cv.width = cv.height = AW; const g = cv.getContext('2d'); let cx = 1, cy = 1, fila = 0; const rect = {};
@@ -99,6 +111,12 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
       if (d1 < .75) carta('plantas' + pick(PLANTAS), px - p.nx * sd * (.5 + R() * .6) + tx * (R() - .5) * w * .7, -.35, pz - p.nz * sd * (.5 + R() * .6) + tz * (R() - .5) * w * .7, tx, tz, alto('plantas', '08') * (.8 + R() * 1.2), { sway: .05 });
       if (R() < .5) { const k = pick(['01', '02', '03', '04', '05', '06', '07', '14', '16', '17']); carta('maquinas' + k, px - p.nx * sd * .25 + tx * (R() - .5) * w * .6, -.25, pz - p.nz * sd * .25 + tz * (R() - .5) * w * .6, tx, tz, alto('maquinas', k)); }
       for (let n = 0; n < 3 && SGK.length; n++) { if (R() > .8) continue; const k = pick(SGK), rh = SG.hs[k], hor = k.startsWith('sg05') || k.startsWith('sg06') || k.startsWith('sg07') || k.startsWith('sg09'); const yy = hor ? 3 + R() * Math.max(2, h * .5) : 2.5 + R() * Math.max(2, h * .45); carta(k, px - p.nx * sd * .14 + tx * (R() - .5) * w * .75, yy, pz - p.nz * sd * .14 + tz * (R() - .5) * w * .75, tx, tz, rh); }
+      // pantallas gigantes en lo alto (35 %) y pantallas medias; casi siempre con una cortina de lianas encima
+      if (R() < .55) { const sk = 'scr' + ((R() * 5) | 0), sw = 11 + R() * 10, sy = Math.max(6, h * (.45 + R() * .4)); carta(sk, px - p.nx * sd * .2 + tx * (R() - .5) * w * .4, sy, pz - p.nz * sd * .2 + tz * (R() - .5) * w * .4, tx, tz, sw * .42, { w: sw });
+        if (R() < .7) carta('lianas' + pick(['01', '02', '03', '05', '06']), px - p.nx * sd * .26 + tx * (R() - .5) * w * .4, sy - 5, pz - p.nz * sd * .26 + tz * (R() - .5) * w * .4, tx, tz, 12 + R() * 6, { sway: .03 }); }
+      // árboles que brotan de las ventanas y bosque en la azotea
+      for (let n = 0; n < 3; n++) if (R() < .6) { const a8 = pick(['01', '02', '03', '04', '05', '06', '07', '08']), th = 6 + R() * 6; carta('arboles' + a8, px - p.nx * sd * (.5 + R() * 1.2) + tx * (R() - .5) * w * .8, 6 + R() * Math.max(2, h * .6), pz - p.nz * sd * (.5 + R() * 1.2) + tz * (R() - .5) * w * .8, tx, tz, th, { sway: .02 }); }
+      for (let n = 0; n < 2; n++) { const a8 = pick(['01', '02', '03', '04', '05', '06', '07', '08']); carta('arboles' + a8, px - p.nx * sd * (1 + R() * 3) + tx * (R() - .5) * w * .7, h * .93 - 1.5, pz - p.nz * sd * (1 + R() * 3) + tz * (R() - .5) * w * .7, tx, tz, 9 + R() * 6, { sway: .02 }); }
       if (R() < .75) { const k = pick(['01', '02', '03', '05', '06', '08']); const lh = alto('lianas', k) * (.9 + R() * .9); carta('lianas' + k, px - p.nx * sd * .08 + tx * (R() - .5) * w * .8, h * .94 - lh + 1, pz - p.nz * sd * .08 + tz * (R() - .5) * w * .8, tx, tz, lh, { sway: .03 }); }
       i += Math.max(5, w * .92);
     }

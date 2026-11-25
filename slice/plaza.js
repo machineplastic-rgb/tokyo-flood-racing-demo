@@ -16,7 +16,8 @@ export function fachada(THREE, mat, uSun) {
     sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
     sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun; uniform sampler2D tA; uniform vec4 uR[24];\n' +
       'vec4 sa(int i, vec2 t){ vec4 r = uR[i]; if (r.z < 1.) return vec4(0.); vec2 f = fract(t); vec2 px = vec2(r.x + min(floor(f.x*r.z), r.z-1.), r.y + min(floor((1.-f.y)*r.w), r.w-1.)) + .5; return texture2D(tA, px/1024.); }\n' +
-      `float hs(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }\n` +
+      `float hs(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(hs(i), hs(i+vec2(1.,0.)), f.x), mix(hs(i+vec2(0.,1.)), hs(i+vec2(1.,1.)), f.x), f.y); }\n` +
       sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       {
         vec3 n = normalize(vWN); float wall = 1. - smoothstep(.30, .65, abs(n.y)); float y = vWP.y;
@@ -41,13 +42,15 @@ export function fachada(THREE, mat, uSun) {
         float h = 0.; vec2 f = vec2(0.);
         // sombra propia (cara que no mira al sol)
         float sunl = clamp(dot(n, normalize(uSun)), 0., 1.); col *= mix(.62, 1.14, sunl);
-        // musgo y enredaderas que suben desde el agua en tiras irregulares
-        float cid = floor(u*1.6), r = hs(vec2(cid, 3.1)), r2 = hs(vec2(cid, 7.7));
-        float alt = (3. + 15.*r*r) * (.6 + .5*hs(floor(vec2(u*5., y*.5)) + 5.));
-        float cobertura = step(y, alt) * step(.38, r2) * smoothstep(0., 1.2, y);
-        float rugoso = step(.35, hs(q*3.7 + 9.));
-        vec3 verde = mix(vec3(.18,.36,.12), vec3(.40,.62,.20), hs(q*2.1));
-        col = mix(col, verde, wall * cobertura * rugoso * .92);
+        // vegetación en MASA (Tokyo Genso): manchas verdes enormes que cubren 40-60 % de la fachada, con hoja pixel y huecos
+        float nz1 = vn2(vec2(u*.11, y*.09) + bid*7.), nz2 = vn2(vec2(u*.42, y*.30) + 3.);
+        float dens = nz1*.62 + nz2*.38;
+        float umbral = .50 - .10*smoothstep(0., 30., y) + .16*step(.5, hs(floor(vec2(vWP.x/21., vWP.z/21.)) + 2.)) ;   // algunos bloques casi cubiertos, otros menos
+        float cub = step(umbral, dens) * smoothstep(-3.4, 1., y);
+        float hoja = hs(q*vec2(1.7, 1.9) + 4.);
+        vec3 vv = hoja < .30 ? vec3(.10,.42,.13) : hoja < .62 ? vec3(.20,.62,.16) : hoja < .88 ? vec3(.44,.80,.22) : vec3(.72,.92,.35);
+        float hueco = step(.90, hs(q*2.3 + 11.));
+        col = mix(col, vv, wall * cub * (1. - hueco*.7) * .97);
         // cortinas colgando desde la azotea no se pueden saber aquí; se pone verde extra en la base (musgo húmedo)
         col = mix(col, vec3(.14,.32,.17), wall * smoothstep(1.4, .0, y) * .75);
         col *= 1. - .30*wall*smoothstep(3., .0, y);                             // oclusión al pie
