@@ -5,6 +5,7 @@ const BASE1 = './spr/px1/', BASE2 = './spr/uni/';
 const IDS = { edificios: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11a', '11b', '12', '13', '14', '15', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N8'],
   plantas: Array.from({ length: 25 }, (_, i) => String(i + 1).padStart(2, '0')), maquinas: Array.from({ length: 35 }, (_, i) => String(i + 1).padStart(2, '0')) };
 const ALTO = {
+  jun: { 1: 15, 2: 14, 3: 7.5, 4: 5, 5: 13, 7: 16, 8: 2.6 },
   fol: { 1: 11, 2: 6, 3: 13, 4: 9, 5: 3.2, 6: 6.5, 7: 12, 8: 2.2 },
   edificios: { '01': 16, '02': 13, '03': 15, '04': 30, '05': 42, '06': 18, '07': 9, '08': 9, '09': 20, '10': 15, '11a': 14, '11b': 7, '12': 7, '13': 20, '14': 9, '15': 5, N1: 20, N2: 26, N3: 20, N4: 18, N5: 19, N6: 15, N7: 20, N8: 10 },
   plantas: { '01': 9, '02': 4.5, '03': 6, '04': 8, '05': 4, '06': 2.6, '07': 2.4, '08': 2.2, '09': 1.8, '10': 2.6, '11': 2.6, '12': 1.4, '13': 1.1, '14': 1.2, '15': .9, '16': 1, '17': .6, '18': 4, '19': 4, '20': 4, '21': 1.2, '22': 1.1, '23': .9, '24': 1, '25': .4 },
@@ -69,6 +70,7 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
   const { desde = 30, hasta = 420 } = opciones;
   const imgs = [];
   for (let i = 1; i <= 8; i++) imgs.push({ k: 'fol' + i, src: './art/fol_' + i + '.png' });
+  for (let i = 1; i <= 8; i++) imgs.push({ k: 'jun' + i, src: './art/jun_' + i + '.png' });
   for (const tipo of Object.keys(IDS)) for (const id of IDS[tipo]) imgs.push({ k: tipo + id, src: BASE1 + tipo + '/' + tipo + '_' + id + '.png' });
   for (const [g, n] of [['calle', 12], ['rotulos', 12], ['lianas', 12], ['arboles', 8]]) for (let i = 1; i <= n; i++) { const s = String(i).padStart(2, '0'); imgs.push({ k: g + s, src: BASE2 + g + '/' + g + '_' + s + '.png' }); }
   await Promise.all(imgs.map(async o => { o.img = await cargaImg(o.src); }));
@@ -125,6 +127,12 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
       for (let n = 0; n < 2; n++) if (R() < .7) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 4) * (.9 + R() * .8); carta('fol4', f[0], h * .93 - fh * .8, f[1], tx, tz, fh, { sway: .03 }); }                      // cortina colgante
       for (let n = 0; n < 2; n++) if (R() < .6) { const f = fx((R() - .5) * w * .9, .2), fh = alto('fol', 7) * (.7 + R() * .8); carta('fol7', f[0], -.3, f[1], tx, tz, fh, { sway: .01 }); }                                   // columna de hiedra
       for (let n = 0; n < 4; n++) if (R() < .85) { const f = fx((R() - .5) * w, .1 + R() * .8), kk = pick([5, 5, 8]); carta('fol' + kk, f[0], -.4, f[1], tx, tz, alto('fol', kk) * (.8 + R() * .5), { sway: .012 }); }      // arbustos y hierba al pie
+      // SELVA (referencia: palmeras y plantas gigantes al pie y en la azotea, tapando la base)
+      for (let n = 0; n < 3; n++) if (R() < .8) { const f = fx((R() - .5) * w * .95, .3 + R() * 1.4), kk = pick([1, 2, 2, 1, 7]), jh = alto('jun', kk) * (.75 + R() * .6); carta('jun' + kk, f[0], -.5, f[1], tx, tz, jh, { sway: .012 }); }          // palmeras y coníferas al pie
+      for (let n = 0; n < 4; n++) if (R() < .9) { const f = fx((R() - .5) * w, .2 + R() * 1.2), kk = pick([3, 3, 4, 4]), jh = alto('jun', kk) * (.8 + R() * .8); carta('jun' + kk, f[0], -.5, f[1], tx, tz, jh, { sway: .01 }); }                    // plantas tropicales grandes
+      for (let n = 0; n < 2; n++) if (R() < .75) { const f = fx((R() - .5) * w * .9, .5 + R() * 2), kk = pick([1, 2]), jh = alto('jun', kk) * (.55 + R() * .35); carta('jun' + kk, f[0], h * .93, f[1], tx, tz, jh, { sway: .02 }); }                          // palmeras asomando en la azotea
+      if (R() < .6) { const f = fx((R() - .5) * w, .2), jh = 9 + R() * 8; carta('jun5', f[0], h * .9 - jh, f[1], tx, tz, jh, { sway: .03 }); }                                                                                              // liana gruesa colgando
+      if (R() < .8) { const f = fx((R() - .5) * w, .1), jh = 2.2 + R() * 1.6; carta('jun8', f[0], -.5, f[1], tx, tz, jh, { w: w * .9 }); }                                                                                                      // pradera con flores
       if (R() < .75) { const k = pick(['01', '02', '03', '05', '06', '08']); const lh = alto('lianas', k) * (.9 + R() * .9); carta('lianas' + k, px - p.nx * sd * .08 + tx * (R() - .5) * w * .8, h * .94 - lh + 1, pz - p.nz * sd * .08 + tz * (R() - .5) * w * .8, tx, tz, lh, { sway: .03 }); }
       i += Math.max(5, w * .92);
     }
@@ -136,6 +144,8 @@ export async function crearSprites(THREE, scene, P, mapa, opciones = {}) {
     const k = pick(['01', '02', '03', '04', '05', '09', '10', '11', '12', '03', '01']); carta('calle' + k, x, -.35, z, p.nx, p.nz, alto('calle', k));
     if (R() < .22) { const a = pick(['01', '02', '03', '04', '05', '06', '07', '08']); const hh = alto('arboles', a); carta('arboles' + a, p.x + p.nx * sd * (t - 2.4), -.5, p.z + p.nz * sd * (t - 2.4), tx, tz, hh, { sway: .02 }); }
   }
+  // cables eléctricos japoneses convertidos en lianas: festones que cruzan la calle de fachada a fachada, a distintas alturas
+  for (let i = desde + 6; i < hasta; i += 17) for (let n = 0; n < 1; n++) { const p = P[i]; if (i > 120 && i < 215) continue; const ww = Math.min(60, (p.w || 26) * (1.0 + R() * .25)); carta('jun6', p.x, 13 + R() * 9, p.z, p.nx, p.nz, ww * 87 / 175 * 1.1, { w: ww }); }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setAttribute('sway', new THREE.Float32BufferAttribute(sw, 2)); geo.setIndex(idx);
   const mat = new THREE.MeshBasicMaterial({ map: atlas, vertexColors: true, alphaTest: .5, side: THREE.DoubleSide, fog: true }); let shd = null;
   mat.onBeforeCompile = (sh) => { sh.uniforms.uT = { value: 0 }; shd = sh;
