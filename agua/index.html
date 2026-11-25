@@ -151,8 +151,8 @@ const casco = new THREE.Mesh(new THREE.BoxGeometry(1.3, .6, 3.2), new THREE.Mesh
 const piloto = new THREE.Mesh(new THREE.BoxGeometry(.5, 1.2, .45), new THREE.MeshLambertMaterial({ color: '#ff5a4e' })); piloto.position.set(0, 1.05, -.3);
 const morro = new THREE.Mesh(new THREE.BoxGeometry(1.0, .35, .5), new THREE.MeshLambertMaterial({ color: '#1fd1e8' })); morro.position.set(0, .35, 1.5);
 const cuerpo = new THREE.Group(); cuerpo.add(casco, piloto, morro); moto.add(cuerpo); scene.add(moto);
-const est = { x: 0, z: 4, yaw: 0, vx: 0, vz: 0, vuelta: 1, t0: null, tv: 0, mejor: null, derrape: false, carga: 0, turbo: 0 };
-let ultimaZ = 4; const OB = [{ x: 1, z: 168, r: 5.6 }];
+const est = { x: 0, z: 16, yaw: 0, vx: 0, vz: 0, vuelta: 1, t0: null, tv: 0, mejor: null, derrape: false, carga: 0, turbo: 0 };
+let ultimaZ = 16; const OB = [{ x: 1, z: 168, r: 5.6 }];
 const Q = new URLSearchParams(location.search);                     // ?z=80&x=0&aer=1&mira=izq|der|alto&auto=1  (capturas de prueba)
 if (Q.has('z')) { est.z = +Q.get('z'); est.x = +(Q.get('x') || 0); }
 const MIRA = Q.get('mira') || ''; if (Q.has('yaw')) est.yaw = +Q.get('yaw');
@@ -167,7 +167,7 @@ for (const id of ['izq', 'der', 'gas', 'freno']) { const b = document.getElement
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => { ent[id] = 0; b.classList.remove('on'); }); }
 const bAuto = document.getElementById('bAuto'); bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; bAuto.onclick = () => { autoGas = !autoGas; bAuto.style.background = autoGas ? '#1c7c8ccc' : ''; };
 document.getElementById('bCam').onclick = () => camAerea = !camAerea;
-function reset() { Object.assign(est, { x: 0, z: 4, yaw: 0, vx: 0, vz: 0, carga: 0, turbo: 0, t0: null, tv: 0, vuelta: 1 }); }
+function reset() { Object.assign(est, { x: 0, z: 16, yaw: 0, vx: 0, vz: 0, carga: 0, turbo: 0, t0: null, tv: 0, vuelta: 1 }); }
 document.getElementById('bReset').onclick = reset;
 // ---------------- fisica arcade (canal recto: paredes segun la semianchura)
 let ultGolpe = -9;
