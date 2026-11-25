@@ -3,13 +3,19 @@
 
 // ---- 1) fachada procedural en el material de la ciudad (ventanas, juntas de azulejo, musgo, enredaderas, oclusión al pie)
 export function fachada(THREE, mat, uSun) {
-  const ld = new THREE.TextureLoader(), T = n => { const t = ld.load('fach/f_' + n + '.png'); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
-  const tt = [1,2,3,4,5,6].map(i => T('../fach/t_' + i).constructor === Object ? null : null); const TT = [1,2,3,4,5,6].map(i => { const t = ld.load('fach/t_' + i + '.png'); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }); void tt;
-  const tb = T('balcones'), tc = T('cristal'), tl = T('ladrillo'), tn = T('bandas'), tr = T('rotulos'), tz = T('azulejo');
+  // atlas único de fachadas (1 sola unidad de textura): vidrio y panel de Shibuya, tiras altas, tienda y piezas de la hoja 1
+  const NOMS = ['g_1','g_2','g_3','g_4','g_5','g_6','t_1','t_2','t_3','t_4','f_balcones','f_ladrillo','f_bandas','f_rotulos','f_azulejo','f_cristal'];
+  const AT = 1024, cv = document.createElement('canvas'); cv.width = cv.height = AT; const cg = cv.getContext('2d');
+  const atlas = new THREE.CanvasTexture(cv); atlas.flipY = false; atlas.magFilter = atlas.minFilter = THREE.NearestFilter; atlas.generateMipmaps = false; atlas.colorSpace = THREE.SRGBColorSpace;
+  const rects = Array.from({ length: 24 }, () => new THREE.Vector4(0, 0, 0, 0));
+  Promise.all(NOMS.map(n => new Promise(ok => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = 'fach/' + n + '.png'; }))).then(ims => {
+    let x = 1, y = 1, fila = 0; ims.forEach((im, i) => { if (!im) return; if (x + im.width + 1 > AT) { x = 1; y += fila + 1; fila = 0; } cg.drawImage(im, x, y); rects[i].set(x, y, im.width, im.height); x += im.width + 1; fila = Math.max(fila, im.height); });
+    atlas.needsUpdate = true; });
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uSun = { value: uSun }; sh.uniforms.tB = { value: tb }; sh.uniforms.tC = { value: tc }; sh.uniforms.tL = { value: tl }; sh.uniforms.tN = { value: tn }; sh.uniforms.tR = { value: tr }; sh.uniforms.tZ = { value: tz }; TT.forEach((t, i) => sh.uniforms['tT' + (i + 1)] = { value: t });
+    sh.uniforms.uSun = { value: uSun }; sh.uniforms.tA = { value: atlas }; sh.uniforms.uR = { value: rects };
     sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun; uniform sampler2D tB, tC, tL, tN, tR, tZ, tT1, tT2, tT3, tT4, tT5, tT6;\n' +
+    sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun; uniform sampler2D tA; uniform vec4 uR[24];\n' +
+      'vec4 sa(int i, vec2 t){ vec4 r = uR[i]; if (r.z < 1.) return vec4(0.); vec2 f = fract(t); vec2 px = vec2(r.x + min(floor(f.x*r.z), r.z-1.), r.y + min(floor((1.-f.y)*r.w), r.w-1.)) + .5; return texture2D(tA, px/1024.); }\n' +
       `float hs(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }\n` +
       sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       {
@@ -23,16 +29,14 @@ export function fachada(THREE, mat, uSun) {
         col = vec3(lum) * tint * 1.18 + vec3(.05,.045,.035);
         // juntas de azulejo cada 1 m
         float jx = step(.93, fract(u*1.)), jy = step(.93, fract(y*1.)); col *= 1. - .10*max(jx, jy);
-        // fachada plana de Flow (vista frontal) tileada por bloque: 14 m de ancho y 13 m de alto por repetición
-        float pick = hs(floor(vec2(vWP.x/17., vWP.z/17.)) + 3.);
-        vec2 fuv = vec2(u/14., y/13.);
-        vec4 ft = pick < .22 ? texture2D(tB, fuv) : pick < .44 ? texture2D(tC, fuv) : pick < .60 ? texture2D(tL, vec2(u/11., y/7.5)) : pick < .80 ? texture2D(tN, fuv) : pick < .90 ? texture2D(tR, vec2(u/9., y/12.)) : texture2D(tZ, vec2(u/9., y/9.));
-        // torres (zona alta de la pared): tiras altas, una por bloque; el resto usa las piezas bajas. La transición por altura reparte el repertorio
-        vec2 tuv = vec2(u/6.2, y/22.);
-        float tp = floor(hs(floor(vec2(vWP.x/23., vWP.z/23.)) + 9.)*6.);
-        vec4 tw = tp < 1. ? texture2D(tT1, tuv) : tp < 2. ? texture2D(tT2, tuv) : tp < 3. ? texture2D(tT3, tuv) : tp < 4. ? texture2D(tT4, tuv) : tp < 5. ? texture2D(tT5, tuv) : texture2D(tT6, tuv);
-        float alta = step(.45, hs(floor(vec2(vWP.x/17., vWP.z/17.)) + 11.));          // 55 % de los bloques usan la tira alta
-        ft = mix(ft, tw, alta);
+        // Shibuya real: sobre todo vidrio y panel moderno (55 %), torres de hormigón/cristal (20 %), tiendas y piezas bajas (25 %); una pieza por bloque
+        float fam = hs(floor(vec2(vWP.x/17., vWP.z/17.)) + 3.), v6 = floor(hs(floor(vec2(vWP.x/19., vWP.z/19.)) + 5.)*6.);
+        vec4 ft;
+        if (fam < .55) { int gi = int(v6); vec2 gu = (gi == 2) ? vec2(u/16., y/14.) : (gi == 5) ? vec2(u/16., y/15.) : vec2(u/14., y/13.); ft = sa(gi, gu); }
+        else if (fam < .75) { int ti = 6 + int(floor(hs(floor(vec2(vWP.x/23., vWP.z/23.)) + 9.)*4.)); ft = sa(ti, vec2(u/6.2, y/22.)); }
+        else if (fam < .86) ft = sa(14, vec2(u/9., y/9.));
+        else if (fam < .93) ft = sa(12, vec2(u/14., y/13.));
+        else ft = sa(10, vec2(u/14., y/13.));
         col = mix(col, ft.rgb * 1.08, wall * ft.a * step(.5, y + 3.4));
         float h = 0.; vec2 f = vec2(0.);
         // sombra propia (cara que no mira al sol)
