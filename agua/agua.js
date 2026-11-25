@@ -6,7 +6,7 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
     uT: { value: 0 }, uSolX: { value: -.45 }, uTinte: { value: new THREE.Color('#ffffff') },
     uMoto: { value: new THREE.Vector4(0, 0, 0, 1) }, uVel: { value: 0 },
     uHN: { value: hN }, uHS: { value: hS },
-    cHondo: { value: new THREE.Color('#12b6d2') }, cMedio: { value: new THREE.Color('#3dd3de') }, cClaro: { value: new THREE.Color('#a6f5ee') }, cBlanco: { value: new THREE.Color('#f4fffb') },
+    cHondo: { value: new THREE.Color('#14b0e2') }, cMedio: { value: new THREE.Color('#2cc6ee') }, cClaro: { value: new THREE.Color('#86e8f8') }, cBlanco: { value: new THREE.Color('#eafdff') },
   }]);
   const mat = new THREE.ShaderMaterial({
     uniforms: u, fog: true, transparent: true, depthWrite: false,
@@ -28,25 +28,32 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
         float f2 = sin(w.x*.9 - w.y*1.4 - t*.4) + sin(w.y*1.1 + w.x*1.3);
         float m = min(abs(f1), abs(f2)); return 1. - smoothstep(0., .5, m);
       }
+      float vor(vec2 p, float ph){ vec2 ip = floor(p), fp = fract(p); float d1 = 8., d2 = 8.;
+        for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){ vec2 g = vec2(float(i), float(j)); vec2 o = vec2(h21(ip + g), h21(ip + g + 17.3)); o = .5 + .40*sin(ph + 6.2831*o); vec2 r = g + o - fp; float d = dot(r, r); if (d < d1){ d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+        return sqrt(d2) - sqrt(d1); }
       bool enHueco(float z, float side){ for (int k = 0; k < ${hN.length}; k++) if (side < 0. && z > uHN[k].x - 1. && z < uHN[k].y + 1.) return true;
         for (int k = 0; k < ${hS.length}; k++) if (side > 0. && z > uHS[k].x - 1. && z < uHS[k].y + 1.) return true; return false; }
       void main(){
         float t = floor(uT*5.)/5. * .30;                 // agua tranquila: 5 pasos por segundo y a un tercio de velocidad
-        vec2 q = floor(vL.xz/.1)*.1;                      // píxel de agua = 10 cm
+        vec2 q = floor(vL.xz/.09)*.09;                      // píxel de agua = 10 cm
         float tl = floor(uT*2.)/2. * .35;
         float z0 = vL.z, x0 = vL.x;
         // sombra de los edificios del lado del sol: banda de borde escalonado que se adentra en el canal
         float xq = floor(x0/.25)*.25; float ds = uSolX < 0. ? xq + hw(z0) : hw(z0) - xq;       // distancia al muro que tapa el sol (depende de la hora)
         float sw = (1.2 + 9.*abs(uSolX)) * (.85 + .18*sin(floor(z0/.5)*.5*.13) + .12*step(.55, h21(vec2(floor(z0/3.), 7.))));
         bool sombra = ds < sw && ds > -.5;
-        float bl = sin(q.x*.40 + tl*.5 + sin(q.y*.55 - tl*.4)*1.7) * sin(q.y*.32 + tl*.35 + sin(q.x*.5 + tl*.3)*1.5);
-        float cs = caust(q*.6, t);
-        vec3 col = cHondo; float a = .60;
-        if (bl > -.15) { col = cMedio; a = .54; }
-        if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .48; }
-        if (sombra) { col *= vec3(.55, .70, .78); a += .26; cs *= .55; }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
-        if (cs > .80) { col = sombra ? cMedio : cClaro; a = sombra ? .5 : .30; }
-        if (cs > .975) { col = cBlanco; a = .62; }
+        float bl = sin(q.x*.90 + tl*.5 + sin(q.y*1.2 - tl*.4)*1.7) * sin(q.y*.70 + tl*.35 + sin(q.x*1.1 + tl*.3)*1.5);
+        vec2 dr = vec2(.05, .13) * floor(uT*5.)/5.;                        // deriva lenta a lo largo del canal
+        float e1 = vor(q*.85 + dr, t*1.6), e2 = vor(q*1.7 + dr*1.7 + 11., t*2.1 + 2.);
+        float cs = 1. - smoothstep(0., .26, e1), cs2 = 1. - smoothstep(0., .17, e2);
+        float dist = length(cameraPosition - vW); float fd = 1. - smoothstep(35., 85., dist); cs *= fd; cs2 *= fd;      // lejos se apaga la línea fina (evita el centelleo)
+        vec3 col = cHondo; float a = .66;
+        if (bl > -.15) { col = cMedio; a = .60; }
+        if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .55; }
+        if (sombra) { col = mix(col, vec3(.02, .21, .19)*(.75 + .35*bl), .80); a += .30; cs *= .35; cs2 *= .3; } else { col *= 1.10; }
+        if (cs2 > .55 && !sombra) { col = mix(col, cClaro, .45); }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
+        if (cs > .40) { col = sombra ? cMedio : cClaro; a = sombra ? .55 : .50; }
+        if (cs > .86) { col = cBlanco; a = .72; }
         // espuma: contra las fachadas (no en los callejones abiertos), alrededor del islote y en la estela de la moto
         float z = vL.z, x = vL.x, foam = 0., wet = 0.;
         float d = hw(z) - abs(x); bool abierto = enHueco(z, sign(x));
@@ -72,7 +79,7 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
           foam += step(borde, .13 + .05*v) * step(.30 + atras*.03, n) * step(atras, 4. + 9.*v) + step(lado, .38) * step(atras, 2.5 + 3.*v) * step(.4, n); }
         col = mix(col, cClaro, wet*.45*step(.5, 1.-foam));
         { vec3 V = normalize(cameraPosition - vW); float fr = pow(1. - clamp(V.y, 0., 1.), 3.);   // a ras de agua refleja el cielo: lejos más clara y opaca
-          col = mix(col, vec3(.62, .86, .98), fr*.65); a += fr*.35; }
+          col = mix(col, vec3(.62, .86, .98), fr*(sombra ? .22 : .65)); a += fr*.35; }
         if (foam > .5) { col = cBlanco; a = .97; }
         col *= uTinte; a = clamp(a, 0., 1.);
         gl_FragColor = vec4(col, a);

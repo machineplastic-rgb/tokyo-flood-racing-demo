@@ -16,7 +16,7 @@ const ALTO = {
   maquinas: { '01': 1.9, '02': 1.9, '03': 1.9, '04': 1.9, '05': 1.9, '06': 1.9, '07': 1.9, '08': 1.1, '09': .45, '10': .45, '11': .5, '12': .5, '13': .4, '14': 1.8, '15': 1.2, '16': 2.4, '17': 1.1, '18': 1, '19': 7.5, '20': 4.5, '21': .7, '22': .7, '23': 2.4, '24': 2.4, '25': 2.4, '26': 3.2, '27': .5, '28': .5, '29': .7, '30': .7, '31': .7, '32': 1.1, '33': 1.5, '34': .9, '35': .1 },
 };
 const HORAS = {   // cielo (arriba, medio, horizonte), niebla, luz hemisferica, sol, tinte de las tarjetas
-  dia: { s: [-.45, .85, .25], cielo: ['#1f9bf0', '#3fb2f6', '#7fd0fa'], niebla: '#b4e0f8', hemi: ['#ffffff', '#b9c9a8', 2.2], sol: ['#fff0cf', 2.6], tinte: '#ffffff' },
+  dia: { s: [-.60, .72, .30], cielo: ['#1f9bf0', '#3fb2f6', '#7fd0fa'], niebla: '#b4e0f8', hemi: ['#ffffff', '#b9c9a8', 1.4], sol: ['#fff0cf', 3.5], tinte: '#ffffff' },
   manana: { s: [.80, .42, .30], cielo: ['#5a9be0', '#a9d3ee', '#fbe7c2'], niebla: '#f0e6d2', hemi: ['#fff4e0', '#b9c9a8', 2.0], sol: ['#ffe2a8', 2.2], tinte: '#fff1dc' },
   tarde: { s: [-.85, .33, .35], cielo: ['#4a78c2', '#f0b07a', '#ffd9a0'], niebla: '#f5cfa0', hemi: ['#ffe2c4', '#a89478', 1.8], sol: ['#ffb871', 2.4], tinte: '#ffe0bc' },
   noche: { s: [.20, .55, .10], cielo: ['#0a1030', '#1f3466', '#3b5a8f'], niebla: '#27406b', hemi: ['#6f86c8', '#1d2a44', 1.1], sol: ['#8fa6ff', .5], tinte: '#7d93d0' },
@@ -81,8 +81,8 @@ export async function mundoTex(ctx) {
     else if (cara === 'S') { L = [X + hw2, Z]; Rr = [X - hw2, Z]; } else { L = [X - hw2, Z]; Rr = [X + hw2, Z]; }
     const u0 = r.x / AW, u1 = (r.x + r.w) / AW, v1 = 1 - r.y / AW, v0 = 1 - (r.y + r.h) / AW;      // v0 abajo
     const t = o.tinte ? tinte.clone().multiply(new THREE.Color(o.tinte)) : tinte.clone();
-    { const Nx = cara === 'E' ? 1 : cara === 'W' ? -1 : 0, Nz = cara === 'S' ? -1 : cara === 'N' ? 1 : 0, S = (HORAS[HORA] || HORAS.dia).s, lit = Math.max(0, Nx * S[0] + Nz * S[2]), m = Math.min(1, lit * 2.2);
-      t.multiplyScalar(1.12 + .32 * lit); t.r *= .93 + .07 * m; t.g *= .98 + .02 * m; t.b *= 1.07 - .07 * m; }   // más luminosos; la fachada que mira al sol se aclara, la de sombra se enfría
+    { const Nx = cara === 'E' ? 1 : cara === 'W' ? -1 : 0, Nz = cara === 'S' ? -1 : cara === 'N' ? 1 : 0, S = (HORAS[HORA] || HORAS.dia).s, lit = Math.max(0, Nx * S[0] + Nz * S[2]), lt = Math.min(1, lit / .30);
+      t.multiplyScalar(.50 + .95 * lt); t.r *= .86 + .14 * lt; t.g *= .96 + .04 * lt; t.b *= 1.16 - .16 * lt; }   // contraste fuerte: a pleno sol x1,45 (casi quemado), en sombra x0,5 y azulada   // más luminosos; la fachada que mira al sol se aclara, la de sombra se enfría
     pos.push(L[0], base, L[1], Rr[0], base, Rr[1], Rr[0], base + h, Rr[1], L[0], base + h, L[1]);
     uv.push(u0, v0, u1, v0, u1, v1, u0, v1); for (let i = 0; i < 4; i++) col.push(t.r, t.g, t.b);
     // viento: plantas se mecen por arriba; lianas y hiedras colgantes por abajo; edificios y mobiliario rigidos
@@ -209,7 +209,7 @@ export async function mundoTex(ctx) {
   let cielo = null;
   // ---------- fondo de la calzada bajo el agua transparente
   { const tl = new THREE.TextureLoader().load(BASE + 'texturas_universo/px64/asfalto_hierba.png'); tl.magFilter = tl.minFilter = THREE.NearestFilter; tl.generateMipmaps = false; tl.wrapS = tl.wrapT = THREE.RepeatWrapping; tl.colorSpace = THREE.SRGBColorSpace; tl.repeat.set(190 / 4, LEN / 4);
-    const pl = new THREE.PlaneGeometry(190, LEN); pl.rotateX(-Math.PI / 2); pl.translate(0, -3.4 + .02, LEN / 2); (ctx.extraObjs ||= []).push(new THREE.Mesh(pl, new THREE.MeshBasicMaterial({ map: tl, color: '#c9e3d6' })));
+    const pl = new THREE.PlaneGeometry(190, LEN); pl.rotateX(-Math.PI / 2); pl.translate(0, -3.4 + .02, LEN / 2); (ctx.extraObjs ||= []).push(new THREE.Mesh(pl, new THREE.MeshBasicMaterial({ map: tl, color: '#7fb8c2' })));
     if (ctx.MAT.agua) { ctx.MAT.agua.transparent = true; ctx.MAT.agua.opacity = .8; ctx.MAT.agua.depthWrite = false; ctx.MAT.agua.needsUpdate = true; } }
   await (await import('./vida.js')).vida({ THREE, scene, camera: ctx.camera, LEN, hw, perchas, R });
   // ---------- ambiente (cielo, niebla, luces)
