@@ -6,7 +6,7 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
     uT: { value: 0 }, uSolX: { value: -.45 }, uSol: { value: new THREE.Vector3(-.48, .82, .30) }, uHt: { value: null }, uTinte: { value: new THREE.Color('#ffffff') },
     uMoto: { value: new THREE.Vector4(0, 0, 0, 1) }, uVel: { value: 0 },
     uHN: { value: hN }, uHS: { value: hS },
-    cHondo: { value: new THREE.Color('#14b0e2') }, cMedio: { value: new THREE.Color('#2cc6ee') }, cClaro: { value: new THREE.Color('#86e8f8') }, cBlanco: { value: new THREE.Color('#eafdff') },
+    cHondo: { value: new THREE.Color('#30c4ee') }, cMedio: { value: new THREE.Color('#4cd4f0') }, cClaro: { value: new THREE.Color('#8af3fe') }, cBlanco: { value: new THREE.Color('#eafdff') },
   }]);
   const mat = new THREE.ShaderMaterial({
     uniforms: u, fog: true, transparent: true, depthWrite: false,
@@ -45,16 +45,16 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
           float Hh = texture2D(uHt, vec2(fract(zs / LEN), uSol.x < 0. ? .25 : .75)).r * 64.; sombra = Hh > tau*uSol.y; }
         float bl = sin(q.x*.90 + tl*.5 + sin(q.y*1.2 - tl*.4)*1.7) * sin(q.y*.70 + tl*.35 + sin(q.x*1.1 + tl*.3)*1.5);
         vec2 dr = vec2(.05, .13) * .3 * floor(uT*5.)/5.;                        // deriva lenta a lo largo del canal
-        float e1 = vor(q*.85 + dr, t*.5), e2 = vor(q*1.7 + dr*1.7 + 11., t*.7 + 2.);
+        float e1 = vor(q*.55 + dr, t*.5), e2 = vor(q*1.15 + dr*1.7 + 11., t*.7 + 2.);
         float cs = 1. - smoothstep(0., .26, e1), cs2 = 1. - smoothstep(0., .17, e2);
         float dist = length(cameraPosition - vW); float fd = 1. - smoothstep(35., 85., dist); cs *= fd; cs2 *= fd;      // lejos se apaga la línea fina (evita el centelleo)
-        vec3 col = cHondo; float a = .66;
-        if (bl > -.15) { col = cMedio; a = .60; }
-        if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .55; }
-        if (sombra) { col = mix(col, vec3(.004, .115, .075)*(.8 + .3*bl), .95); a = max(a + .30, .95); cs *= .85; cs2 *= .6; } else { col *= 1.10; }
-        if (cs2 > .55 && !sombra) { col = mix(col, cClaro, .45); }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
-        if (cs > .40) { col = sombra ? vec3(.03, .36, .30) : cClaro; a = sombra ? .95 : .50; }
-        if (cs > .86) { col = sombra ? vec3(.05, .48, .40) : cBlanco; a = sombra ? .95 : .72; }
+        vec3 col = cHondo; float a = .80;
+        if (bl > -.15) { col = cMedio; a = .76; }
+        if (bl > .45) { col = mix(cMedio, cClaro, .4); a = .72; }
+        if (sombra) { col = mix(col, vec3(.005, .13, .07)*(.85 + .25*bl), .97); a = max(a + .30, .95); cs *= .85; cs2 *= .6; } else { col *= 1.10; }
+        if (cs2 > .55 && !sombra) { col = mix(col, cClaro, .30); }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
+        if (cs > .40) { col = sombra ? vec3(.03, .36, .30) : cClaro; a = sombra ? .95 : .70; }
+        if (cs > .86) { col = sombra ? vec3(.05, .48, .40) : mix(cClaro, cBlanco, .35); a = sombra ? .95 : .85; }
         // espuma: contra las fachadas (no en los callejones abiertos), alrededor del islote y en la estela de la moto
         float z = vL.z, x = vL.x, foam = 0., wet = 0.;
         float d = hw(z) - abs(x); bool abierto = enHueco(z, sign(x));
@@ -79,8 +79,16 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
           float n = h21(floor(vec2(z*5., x*5.)) + floor(uT*8.));
           foam += step(borde, .13 + .05*v) * step(.30 + atras*.03, n) * step(atras, 4. + 9.*v) + step(lado, .38) * step(atras, 2.5 + 3.*v) * step(.4, n); }
         col = mix(col, cClaro, wet*.45*step(.5, 1.-foam));
+        // sombras de objetos (velos translúcidos: la red de celdas se sigue viendo debajo). Cada una se desplaza según la altura del objeto y la dirección del sol.
+        if (!sombra) { float os = 0.; vec2 sd = -uSol.xz / uSol.y;
+          vec2 mc = uMoto.xy + sd*1.2; vec2 dm2 = vec2(q.x - mc.x, mod(q.y - mc.y + LEN*.5, LEN) - LEN*.5); float al = dot(dm2, uMoto.zw), la = dot(dm2, vec2(-uMoto.w, uMoto.z));
+          os = max(os, step(al*al/4.4 + la*la/.8, 1.));                                          // moto
+          float zv = mod(q.y, LEN); os = max(os, step(91.5 + sd.y*11., zv) * step(zv, 98.5 + sd.y*7.));   // viaducto y tren (7 a 11,4 m)
+          for (int k = 0; k < 3; k++) { float zc = k == 0 ? 42. : k == 1 ? 72. : 130.; os = max(os, step(abs(zv - (zc + sd.y*7.45)), .13)); }     // cables
+          vec2 dI = q - (vec2(1., 168.) + sd*9.); os = max(os, step(dot(dI, dI), 22.)); // copa del árbol del islote
+          col = mix(col, col*vec3(.46, .66, .78), os*.9); }
         { vec3 V = normalize(cameraPosition - vW); float fr = pow(1. - clamp(V.y, 0., 1.), 3.);   // a ras de agua refleja el cielo: lejos más clara y opaca
-          col = mix(col, vec3(.62, .86, .98), fr*(sombra ? .22 : .65)); a += fr*.35; }
+          col = mix(col, vec3(.62, .86, .98), fr*(sombra ? .22 : .40)); a += fr*.25; }
         if (foam > .5) { col = cBlanco; a = .97; }
         col *= uTinte; a = clamp(a, 0., 1.);
         gl_FragColor = vec4(col, a);
