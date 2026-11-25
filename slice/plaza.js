@@ -4,11 +4,12 @@
 // ---- 1) fachada procedural en el material de la ciudad (ventanas, juntas de azulejo, musgo, enredaderas, oclusión al pie)
 export function fachada(THREE, mat, uSun) {
   const ld = new THREE.TextureLoader(), T = n => { const t = ld.load('fach/f_' + n + '.png'); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+  const tt = [1,2,3,4,5,6].map(i => T('../fach/t_' + i).constructor === Object ? null : null); const TT = [1,2,3,4,5,6].map(i => { const t = ld.load('fach/t_' + i + '.png'); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }); void tt;
   const tb = T('balcones'), tc = T('cristal'), tl = T('ladrillo'), tn = T('bandas'), tr = T('rotulos'), tz = T('azulejo');
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uSun = { value: uSun }; sh.uniforms.tB = { value: tb }; sh.uniforms.tC = { value: tc }; sh.uniforms.tL = { value: tl }; sh.uniforms.tN = { value: tn }; sh.uniforms.tR = { value: tr }; sh.uniforms.tZ = { value: tz };
+    sh.uniforms.uSun = { value: uSun }; sh.uniforms.tB = { value: tb }; sh.uniforms.tC = { value: tc }; sh.uniforms.tL = { value: tl }; sh.uniforms.tN = { value: tn }; sh.uniforms.tR = { value: tr }; sh.uniforms.tZ = { value: tz }; TT.forEach((t, i) => sh.uniforms['tT' + (i + 1)] = { value: t });
     sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);');
-    sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun; uniform sampler2D tB, tC, tL, tN, tR, tZ;\n' +
+    sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN; uniform vec3 uSun; uniform sampler2D tB, tC, tL, tN, tR, tZ, tT1, tT2, tT3, tT4, tT5, tT6;\n' +
       `float hs(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }\n` +
       sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       {
@@ -26,6 +27,12 @@ export function fachada(THREE, mat, uSun) {
         float pick = hs(floor(vec2(vWP.x/17., vWP.z/17.)) + 3.);
         vec2 fuv = vec2(u/14., y/13.);
         vec4 ft = pick < .22 ? texture2D(tB, fuv) : pick < .44 ? texture2D(tC, fuv) : pick < .60 ? texture2D(tL, vec2(u/11., y/7.5)) : pick < .80 ? texture2D(tN, fuv) : pick < .90 ? texture2D(tR, vec2(u/9., y/12.)) : texture2D(tZ, vec2(u/9., y/9.));
+        // torres (zona alta de la pared): tiras altas, una por bloque; el resto usa las piezas bajas. La transición por altura reparte el repertorio
+        vec2 tuv = vec2(u/6.2, y/22.);
+        float tp = floor(hs(floor(vec2(vWP.x/23., vWP.z/23.)) + 9.)*6.);
+        vec4 tw = tp < 1. ? texture2D(tT1, tuv) : tp < 2. ? texture2D(tT2, tuv) : tp < 3. ? texture2D(tT3, tuv) : tp < 4. ? texture2D(tT4, tuv) : tp < 5. ? texture2D(tT5, tuv) : texture2D(tT6, tuv);
+        float alta = step(.45, hs(floor(vec2(vWP.x/17., vWP.z/17.)) + 11.));          // 55 % de los bloques usan la tira alta
+        ft = mix(ft, tw, alta);
         col = mix(col, ft.rgb * 1.08, wall * ft.a * step(.5, y + 3.4));
         float h = 0.; vec2 f = vec2(0.);
         // sombra propia (cara que no mira al sol)
