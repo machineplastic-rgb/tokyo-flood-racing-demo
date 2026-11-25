@@ -51,10 +51,10 @@ export function crearAgua(THREE, { LEN, huecosN, huecosS, W0, W1 }) {
         vec3 col = cHondo; float a = .66;
         if (bl > -.15) { col = cMedio; a = .60; }
         if (bl > .45) { col = mix(cMedio, cClaro, .5); a = .55; }
-        if (sombra) { col = mix(col, vec3(.004, .115, .075)*(.8 + .3*bl), .95); a = max(a + .30, .95); cs *= .35; cs2 *= .3; } else { col *= 1.10; }
+        if (sombra) { col = mix(col, vec3(.004, .115, .075)*(.8 + .3*bl), .95); a = max(a + .30, .95); cs *= .85; cs2 *= .6; } else { col *= 1.10; }
         if (cs2 > .55 && !sombra) { col = mix(col, cClaro, .45); }       // en sombra: más oscura y casi opaca (no se ve el fondo), cáusticas apagadas
-        if (cs > .40) { col = sombra ? cMedio : cClaro; a = sombra ? .55 : .50; }
-        if (cs > .86) { col = cBlanco; a = .72; }
+        if (cs > .40) { col = sombra ? vec3(.03, .36, .30) : cClaro; a = sombra ? .95 : .50; }
+        if (cs > .86) { col = sombra ? vec3(.05, .48, .40) : cBlanco; a = sombra ? .95 : .72; }
         // espuma: contra las fachadas (no en los callejones abiertos), alrededor del islote y en la estela de la moto
         float z = vL.z, x = vL.x, foam = 0., wet = 0.;
         float d = hw(z) - abs(x); bool abierto = enHueco(z, sign(x));
